@@ -1,0 +1,25 @@
+{
+  "name": "sellbot-landing",
+  "version": "1.0.0",
+  "description": "",
+  "main": "script.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "live-server --ignorePattern=\"(backend-bot|auth_info)\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bagasAi30/sellbot-landing.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/bagasAi30/sellbot-landing/issues"
+  },
+  "homepage": "https://github.com/bagasAi30/sellbot-landing#readme",
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  }
+}
