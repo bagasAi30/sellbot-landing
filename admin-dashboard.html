@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin - AsistenLapak Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="dashboard.css">
+    <link rel="stylesheet" href="admin.css">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body class="dashboard-body">
+    <!-- Decorative background blobs -->
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+    <div class="blob blob-4"></div>
+
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <img src="favicon.svg" alt="AsistenLapak AI Logo" width="32" height="32">
+                <span>Admin <strong>Panel</strong></span>
+            </div>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="#" class="nav-item active" data-target="overview">
+                <i class="ph ph-squares-four"></i> Overview
+            </a>
+            <a href="#" class="nav-item" data-target="users">
+                <i class="ph ph-users-three"></i> User Management
+            </a>
+            <a href="#" class="nav-item" data-target="revenue">
+                <i class="ph ph-currency-circle-dollar"></i> Revenue & Billing
+            </a>
+            <a href="#" class="nav-item" data-target="health">
+                <i class="ph ph-activity"></i> System Health
+            </a>
+            <a href="#" class="nav-item" data-target="settings">
+                <i class="ph ph-gear"></i> Global Settings
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <a href="index.html" class="nav-item">
+                <i class="ph ph-sign-out"></i> Log Out
+            </a>
+        </div>
+    </aside>
+
+    <div class="main-wrapper">
+        <!-- Top Header -->
+        <header class="top-header glass">
+            <div class="header-welcome">
+                <h2>Welcome back, Super Admin 🛡️</h2>
+                <p>Platform status is looking great today.</p>
+            </div>
+            <div class="header-actions-right">
+                <button class="btn-icon"><i class="ph ph-bell"></i><span class="notification-dot"></span></button>
+                <div class="user-profile">
+                    <div class="avatar-small">SA</div>
+                    <span class="user-name">Administrator</span>
+                    <i class="ph ph-caret-down"></i>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- Dashboard Section -->
+            <section id="overview" class="dashboard-section active">
+                
+                <div class="metrics-grid">
+                    <div class="metric-card glass">
+                        <div class="metric-icon highlight"><i class="ph ph-users"></i></div>
+                        <div class="metric-info">
+                            <h3>1,240</h3>
+                            <p>Active Customers</p>
+                        </div>
+                    </div>
+                    <div class="metric-card glass">
+                        <div class="metric-icon success"><i class="ph ph-chart-line-up"></i></div>
+                        <div class="metric-info">
+                            <h3>Rp 45.5M</h3>
+                            <p>Monthly Recurring Rev.</p>
+                        </div>
+                    </div>
+                    <div class="metric-card glass">
+                        <div class="metric-icon"><i class="ph ph-chats-circle"></i></div>
+                        <div class="metric-info">
+                            <h3>1.2M</h3>
+                            <p>Total Messages (Platform)</p>
+                        </div>
+                    </div>
+                    <div class="metric-card glass">
+                        <div class="metric-icon success"><i class="ph ph-activity"></i></div>
+                        <div class="metric-info">
+                            <h3>99.9%</h3>
+                            <p>System Uptime</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid-main">
+                    <!-- Platform Overview / Quick Actions -->
+                    <div class="widget glass quick-actions-widget">
+                        <div class="widget-header">
+                            <h3>Admin Actions</h3>
+                        </div>
+                        <div class="quick-actions-content">
+                            <div class="action-banner">
+                                <i class="ph ph-megaphone icon-large"></i>
+                                <div>
+                                    <h4>System Announcement</h4>
+                                    <p>Broadcast a message to all active tenants.</p>
+                                </div>
+                            </div>
+                            <button class="btn btn-primary btn-large full-width mt-16" id="btnSendBroadcast">
+                                <i class="ph ph-broadcast"></i> Send Broadcast
+                            </button>
+                            <div class="secondary-actions mt-16">
+                                <button class="btn btn-outline full-width" id="btnAddCustomer"><i class="ph ph-user-plus"></i> Add Customer</button>
+                                <button class="btn btn-outline full-width" id="btnViewLogs"><i class="ph ph-code"></i> View Server Logs</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Registrations -->
+                    <div class="widget glass campaigns-widget">
+                        <div class="widget-header">
+                            <h3>Recent Registrations</h3>
+                            <a href="#" class="view-all" onclick="document.querySelector('[data-target=\'users\']').click()">View All <i class="ph ph-arrow-right"></i></a>
+                        </div>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Store Name</th>
+                                        <th>Plan</th>
+                                        <th>Status</th>
+                                        <th>Joined Date</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recentUsersBody">
+                                    <tr>
+                                        <td><strong>Toko Baju Kekinian</strong><br><span style="font-size:12px;color:var(--text-secondary);">Andi Setiawan</span></td>
+                                        <td><span class="tag tag-pro">Pro Plan</span></td>
+                                        <td><span class="status-badge closed">Active</span></td>
+                                        <td>Today, 10:45 AM</td>
+                                        <td><button class="btn btn-outline btn-small">Manage</button></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Gadget Store Jkt</strong><br><span style="font-size:12px;color:var(--text-secondary);">Budi Santoso</span></td>
+                                        <td><span class="tag tag-starter">Starter</span></td>
+                                        <td><span class="status-badge closed">Active</span></td>
+                                        <td>Yesterday</td>
+                                        <td><button class="btn btn-outline btn-small">Manage</button></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Aksesoris Cantik</strong><br><span style="font-size:12px;color:var(--text-secondary);">Siska</span></td>
+                                        <td><span class="tag tag-trial">Trial</span></td>
+                                        <td><span class="status-badge error">Expired</span></td>
+                                        <td>Oct 15, 2023</td>
+                                        <td><button class="btn btn-outline btn-small">Manage</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Populated Sections -->
+            <section id="users" class="dashboard-section">
+                <header class="section-header">
+                    <h2>User Management</h2>
+                    <div class="filters">
+                        <input type="text" placeholder="Search customer or store..." class="filter-select glass" style="width: 250px;">
+                    </div>
+                </header>
+
+                <div class="widget glass full-width p-0">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Customer Name</th>
+                                    <th>Contact</th>
+                                    <th>Store Name</th>
+                                    <th>Plan</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="allUsersBody">
+                                <tr>
+                                    <td><strong>Andi Setiawan</strong></td>
+                                    <td>+62 812-3456-7890</td>
+                                    <td>Toko Baju Kekinian</td>
+                                    <td><span class="tag tag-pro">Pro Plan</span></td>
+                                    <td><span class="status-badge closed">Active</span></td>
+                                    <td><button class="btn btn-outline btn-small">Edit</button></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Budi Santoso</strong></td>
+                                    <td>+62 899-1122-3344</td>
+                                    <td>Gadget Store Jkt</td>
+                                    <td><span class="tag tag-starter">Starter</span></td>
+                                    <td><span class="status-badge closed">Active</span></td>
+                                    <td><button class="btn btn-outline btn-small">Edit</button></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Siska</strong></td>
+                                    <td>+62 855-6677-8899</td>
+                                    <td>Aksesoris Cantik</td>
+                                    <td><span class="tag tag-trial">Trial</span></td>
+                                    <td><span class="status-badge error">Suspended</span></td>
+                                    <td><button class="btn btn-outline btn-small">Activate</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="revenue" class="dashboard-section">
+                <header class="section-header">
+                    <h2>Revenue & Billing</h2>
+                    <button class="btn btn-outline" id="btnExportCsv"><i class="ph ph-download-simple"></i> Export CSV</button>
+                </header>
+                
+                <div class="metrics-grid" style="margin-bottom: 24px;">
+                    <div class="metric-card glass">
+                        <div class="metric-icon success"><i class="ph ph-money"></i></div>
+                        <div class="metric-info">
+                            <h3>Rp 45.5M</h3>
+                            <p>Total Revenue (MTD)</p>
+                        </div>
+                    </div>
+                    <div class="metric-card glass">
+                        <div class="metric-icon highlight"><i class="ph ph-receipt"></i></div>
+                        <div class="metric-info">
+                            <h3>142</h3>
+                            <p>Active Subscriptions</p>
+                        </div>
+                    </div>
+                    <div class="metric-card glass">
+                        <div class="metric-icon warning"><i class="ph ph-clock"></i></div>
+                        <div class="metric-info">
+                            <h3>Rp 2.1M</h3>
+                            <p>Pending Invoices</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="widget glass full-width p-0">
+                    <div class="widget-header" style="padding: 24px 24px 0;">
+                        <h3>Recent Transactions</h3>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Invoice ID</th>
+                                    <th>Store Name</th>
+                                    <th>Amount</th>
+                                    <th>Method</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>INV-2023-089</strong></td>
+                                    <td>Toko Baju Kekinian</td>
+                                    <td>Rp 350,000</td>
+                                    <td>Bank Transfer</td>
+                                    <td><span class="status-badge closed">Paid</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>INV-2023-088</strong></td>
+                                    <td>Gadget Store Jkt</td>
+                                    <td>Rp 150,000</td>
+                                    <td>QRIS</td>
+                                    <td><span class="status-badge closed">Paid</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>INV-2023-087</strong></td>
+                                    <td>Aksesoris Cantik</td>
+                                    <td>Rp 150,000</td>
+                                    <td>Credit Card</td>
+                                    <td><span class="status-badge human">Pending</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="health" class="dashboard-section">
+                <header class="section-header">
+                    <h2>System Health & Monitoring</h2>
+                    <span class="status-badge closed"><i class="ph-fill ph-check-circle"></i> All Systems Operational</span>
+                </header>
+
+                <div class="metrics-grid">
+                    <div class="metric-card glass">
+                        <div class="metric-icon highlight"><i class="ph ph-cpu"></i></div>
+                        <div class="metric-info">
+                            <h3>42%</h3>
+                            <p>Server CPU Usage</p>
+                        </div>
+                    </div>
+                    <div class="metric-card glass">
+                        <div class="metric-icon"><i class="ph ph-memory"></i></div>
+                        <div class="metric-info">
+                            <h3>68%</h3>
+                            <p>Memory (RAM) Usage</p>
+                        </div>
+                    </div>
+                    <div class="metric-card glass">
+                        <div class="metric-icon warning"><i class="ph-fill ph-cpu"></i></div>
+                        <div class="metric-info">
+                            <h3>80%</h3>
+                            <p>AI API Quota Limit</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="widget glass">
+                    <div class="widget-header">
+                        <h3>Microservices Status</h3>
+                    </div>
+                    <div class="settings-list">
+                        <div class="setting-item">
+                            <span class="setting-label">WhatsApp Cloud API Gateway</span>
+                            <span class="setting-value" style="color: var(--success);"><i class="ph-fill ph-check-circle"></i> Operational (99.9% uptime)</span>
+                        </div>
+                        <div class="setting-item">
+                            <span class="setting-label">OpenAI Language Models</span>
+                            <span class="setting-value" style="color: var(--success);"><i class="ph-fill ph-check-circle"></i> Operational (142ms avg response)</span>
+                        </div>
+                        <div class="setting-item">
+                            <span class="setting-label">Database Cluster (PostgreSQL)</span>
+                            <span class="setting-value" style="color: var(--success);"><i class="ph-fill ph-check-circle"></i> Operational (Replication Sync OK)</span>
+                        </div>
+                        <div class="setting-item">
+                            <span class="setting-label">Vector DB (Knowledge Base)</span>
+                            <span class="setting-value" style="color: #FBBF24;"><i class="ph-fill ph-warning-circle"></i> Minor Degradation (High load)</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="settings" class="dashboard-section">
+                <header class="section-header">
+                    <h2>Global Platform Settings</h2>
+                    <button class="btn btn-primary" id="btnSaveConfig"><i class="ph ph-floppy-disk"></i> Save Configuration</button>
+                </header>
+
+                <div class="settings-grid">
+                    <div class="widget glass form-card">
+                        <div class="widget-header">
+                            <h3><i class="ph-fill ph-key"></i> Core Integrations</h3>
+                        </div>
+                        <div class="form-group">
+                            <label>OpenAI Master API Key</label>
+                            <input type="password" class="form-control" value="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" placeholder="sk-...">
+                            <span class="form-hint">Used as a fallback when customers don't provide their own keys.</span>
+                        </div>
+                        <div class="form-group">
+                            <label>WhatsApp Business Account ID</label>
+                            <input type="text" class="form-control" value="109283746519283" placeholder="WABA ID">
+                        </div>
+                    </div>
+
+                    <div class="widget glass form-card">
+                        <div class="widget-header">
+                            <h3><i class="ph-fill ph-sliders"></i> Platform Defaults</h3>
+                        </div>
+                        <div class="form-group">
+                            <label>Default Trial Period (Days)</label>
+                            <input type="number" class="form-control" value="14" placeholder="14">
+                        </div>
+                        <div class="form-group">
+                            <div class="toggle-row">
+                                <div>
+                                    <label style="margin-bottom: 2px;">Global Maintenance Mode</label>
+                                    <span class="form-hint">Temporarily disable access for all non-admin users.</span>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Modal: Send Broadcast -->
+    <div class="modal-overlay" id="broadcastModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="ph ph-broadcast"></i> Send Broadcast</h3>
+                <button class="modal-close" onclick="closeModal('broadcastModal')">&times;</button>
+            </div>
+            <p style="color:var(--text-secondary);margin-bottom:16px;">Pesan ini akan dikirim ke semua tenant aktif di platform.</p>
+            <div class="form-group">
+                <label>Pesan Broadcast</label>
+                <textarea id="broadcastMessage" class="form-control" rows="5" placeholder="Contoh: Kami akan melakukan maintenance pada 1 Jan 2025 pukul 02.00 WIB. Mohon maaf atas ketidaknyamanannya..." style="resize:vertical;"></textarea>
+            </div>
+            <button class="btn btn-primary full-width" style="margin-top:16px;" id="btnConfirmBroadcast">
+                <i class="ph ph-paper-plane-right"></i> Kirim Sekarang
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal: Add Customer -->
+    <div class="modal-overlay" id="addCustomerModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="ph ph-user-plus"></i> Add Customer</h3>
+                <button class="modal-close" onclick="closeModal('addCustomerModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Nama Lengkap *</label>
+                <input type="text" class="form-control" id="newCustomerName" placeholder="Contoh: Budi Santoso">
+            </div>
+            <div class="form-group" style="margin-top:16px;">
+                <label>Nama Toko *</label>
+                <input type="text" class="form-control" id="newStoreName" placeholder="Contoh: Toko Baju Kekinian">
+            </div>
+            <div class="form-group" style="margin-top:16px;">
+                <label>Email *</label>
+                <input type="email" class="form-control" id="newCustomerEmail" placeholder="email@contoh.com">
+            </div>
+            <div class="form-group" style="margin-top:16px;">
+                <label>Plan</label>
+                <select class="form-control" id="newCustomerPlan">
+                    <option value="trial">Trial</option>
+                    <option value="starter">Starter</option>
+                    <option value="pro">Pro</option>
+                </select>
+            </div>
+            <button class="btn btn-primary full-width" style="margin-top:20px;" id="btnSaveCustomer">
+                <i class="ph ph-user-check"></i> Simpan Customer
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal: Edit User -->
+    <div class="modal-overlay" id="editUserModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="ph ph-pencil-simple"></i> Edit User</h3>
+                <button class="modal-close" onclick="closeModal('editUserModal')">&times;</button>
+            </div>
+            <input type="hidden" id="editUserId">
+            <div class="form-group">
+                <label>Nama Toko / Store</label>
+                <input type="text" class="form-control" id="editUserStoreName" placeholder="Nama Toko">
+            </div>
+            <div class="form-group" style="margin-top:16px;">
+                <label>Plan</label>
+                <select class="form-control" id="editUserPlan">
+                    <option value="trial">Trial</option>
+                    <option value="starter">Starter</option>
+                    <option value="pro">Pro</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin-top:16px;">
+                <label>Status Akun</label>
+                <select class="form-control" id="editUserStatus">
+                    <option value="active">Active</option>
+                    <option value="suspended">Suspended</option>
+                    <option value="expired">Expired</option>
+                </select>
+            </div>
+            <button class="btn btn-primary full-width" style="margin-top:20px;" id="btnSaveEditUser">
+                <i class="ph ph-floppy-disk"></i> Simpan Perubahan
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal: Server Logs -->
+    <div class="modal-overlay" id="serverLogsModal">
+        <div class="modal-content" style="max-width:700px;">
+            <div class="modal-header">
+                <h3><i class="ph ph-terminal-window"></i> Server Logs</h3>
+                <button class="modal-close" onclick="closeModal('serverLogsModal')">&times;</button>
+            </div>
+            <pre id="serverLogsContent" style="background:rgba(0,0,0,0.4);border-radius:12px;padding:20px;font-size:12px;font-family:monospace;color:#a3e635;overflow-y:auto;max-height:400px;white-space:pre-wrap;border:1px solid rgba(255,255,255,0.08);">Memuat log...</pre>
+            <button class="btn btn-outline full-width" style="margin-top:16px;" onclick="closeModal('serverLogsModal')">Tutup</button>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>

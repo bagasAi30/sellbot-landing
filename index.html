@@ -12,33 +12,22 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
 
 <body>
-    <div class="glow-bg glow-1"></div>
-    <div class="glow-bg glow-2"></div>
+    <!-- Decorative background blobs -->
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+    <div class="blob blob-4"></div>
 
     <!-- Navigation -->
     <nav class="navbar">
         <div class="container nav-content">
             <div class="logo">
-                <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                        d="M16 2C8.26801 2 2 7.8203 2 15C2 18.9959 3.99349 22.5647 7.08639 24.8711C6.73295 26.6579 5.51862 28.5135 3.39953 29.5663C3.17646 29.6772 3.06497 29.9328 3.1491 30.1634C3.23322 30.394 3.46824 30.5 3.70889 30.5C7.94052 30.5 11.2319 28.3243 12.8717 26.5452C13.8821 26.8385 14.928 27 16 27C23.732 27 30 21.1797 30 14C30 6.8203 23.732 2 16 2Z"
-                        fill="url(#grad1)" />
-                    <circle cx="16" cy="14" r="3" fill="#0F172A" />
-                    <circle cx="10" cy="14" r="2" fill="#0F172A" />
-                    <circle cx="22" cy="14" r="2" fill="#0F172A" />
-                    <line x1="12" y1="14" x2="14" y2="14" stroke="#0F172A" stroke-width="1.5" />
-                    <line x1="18" y1="14" x2="20" y2="14" stroke="#0F172A" stroke-width="1.5" />
-                    <defs>
-                        <linearGradient id="grad1" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
-                            <stop stop-color="#8B5CF6" />
-                            <stop offset="1" stop-color="#06B6D4" />
-                        </linearGradient>
-                    </defs>
-                </svg>
+                <img src="favicon.svg" alt="AsistenLapak AI Logo" width="28" height="28">
                 <span>AsistenLapak <strong>AI</strong></span>
             </div>
             <ul class="nav-links">
@@ -46,7 +35,10 @@
                 <li><a href="#cara-kerja">Cara Kerja</a></li>
                 <li><a href="#harga">Harga</a></li>
             </ul>
-            <a href="#harga" class="btn btn-primary">Coba Gratis</a>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <a href="login.html?mode=login" class="btn btn-outline">Login</a>
+                <a href="login.html" target="_blank" class="btn btn-primary">Coba Gratis</a>
+            </div>
         </div>
     </nav>
 
@@ -60,7 +52,7 @@
                 langsung buatkan invoice di dalam WhatsApp. <strong>Fokus jualan, tanpa ribet buka dashboard.</strong>
             </p>
             <div class="hero-buttons">
-                <a href="#harga" class="btn btn-primary btn-large">Mulai 14 Hari Gratis</a>
+                <a href="login.html" target="_blank" class="btn btn-primary btn-large">Mulai 3 Hari Gratis</a>
                 <a href="#cara-kerja" class="btn btn-outline btn-large"><i class="ph ph-play-circle"></i> Lihat Cara
                     Kerja</a>
             </div>
@@ -192,31 +184,31 @@
         <div class="feature-row">
             <div class="feature-text">
                 <div class="badge glow">Inti Produk</div>
-                <h2>AI Chat Service 🧠</h2>
+                <h2 style="display: flex; align-items: center; gap: 12px;"><i class="ph-fill ph-brain" style="color: var(--primary);"></i> AI Chat Service</h2>
                 <p>AI membaca chat masuk dan membalas otomatis secara natural dengan <strong>Tone
                         Personalization</strong> (Formal, Santai, atau Gaul) bahkan mendukung bahasa slang dan campur
                     kode.</p>
-                <ul>
-                    <li><i class="ph-fill ph-check-circle"></i> Intent Detection (Stok, harga, nego, komplain)</li>
-                    <li><i class="ph-fill ph-check-circle"></i> Context Awareness (Paham konteks chat)</li>
-                    <li><i class="ph-fill ph-check-circle"></i> Human Takeover kapan saja</li>
+                <ul style="padding-left: 20px; list-style-type: disc;">
+                    <li>Intent Detection (Stok, harga, nego, komplain)</li>
+                    <li>Context Awareness (Paham konteks chat)</li>
+                    <li>Human Takeover kapan saja</li>
                 </ul>
             </div>
             <div class="feature-img glass">
-                <img src="dashboard.jpg" alt="AI Chat Service Dashboard" style="border-radius: 12px; width: 100%;">
+                <img src="ai-chat-service.jpg" alt="AI Chat Service Dashboard" style="border-radius: 12px; width: 100%;">
             </div>
         </div>
 
         <div class="feature-row reverse">
             <div class="feature-text">
                 <div class="badge glow">Otomatisasi</div>
-                <h2>Invoice di Chat 🧾</h2>
+                <h2 style="display: flex; align-items: center; gap: 12px;"><i class="ph-fill ph-receipt" style="color: var(--primary);"></i> Invoice di Chat</h2>
                 <p>Bukan web, bukan link eksternal. Invoice dibuat AI langsung sebagai pesan WhatsApp saat pelanggan
                     sudah siap order.</p>
-                <ul>
-                    <li><i class="ph-fill ph-check-circle"></i> AI hitung subtotal & ongkir</li>
-                    <li><i class="ph-fill ph-check-circle"></i> Kirim gambar QRIS otomatis</li>
-                    <li><i class="ph-fill ph-check-circle"></i> Deteksi bukti bayar pelanggan</li>
+                <ul style="padding-left: 20px; list-style-type: disc;">
+                    <li>AI hitung subtotal & ongkir</li>
+                    <li>Kirim gambar QRIS otomatis</li>
+                    <li>Deteksi bukti bayar pelanggan</li>
                 </ul>
             </div>
             <div class="feature-img glass p-0" style="padding: 24px !important;">
@@ -263,13 +255,13 @@
         <div class="feature-row">
             <div class="feature-text">
                 <div class="badge glow">Control Center</div>
-                <h2>Knowledge Base & Dashboard 🎛️</h2>
+                <h2 style="display: flex; align-items: center; gap: 12px;"><i class="ph-fill ph-database" style="color: var(--primary);"></i> Knowledge Base & Dashboard</h2>
                 <p>Tempat penjual mengisi "otak" AI sekali di awal, dan pantau performa chat. Dashboard dibuat bukan
                     untuk balas chat, melainkan monitor bisnis Anda.</p>
-                <ul>
-                    <li><i class="ph-fill ph-check-circle"></i> Import Bulk CSV Produk</li>
-                    <li><i class="ph-fill ph-check-circle"></i> FAQ Builder</li>
-                    <li><i class="ph-fill ph-check-circle"></i> Ringkasan Harian & Label Chat</li>
+                <ul style="padding-left: 20px; list-style-type: disc;">
+                    <li>Import Bulk CSV Produk</li>
+                    <li>FAQ Builder</li>
+                    <li>Ringkasan Harian & Label Chat</li>
                 </ul>
             </div>
             <div class="feature-img glass" style="padding: 0; overflow: hidden; align-items: stretch;">
@@ -293,7 +285,7 @@
                             <tbody>
                                 <tr>
                                     <td>
-                                        <div class="img-ph"></div>
+                                        <img src="kaos_maroon.jpg" class="img-ph" style="object-fit: cover;" alt="Kaos Maroon">
                                     </td>
                                     <td>Kaos Polos Cotton Combed 30s</td>
                                     <td>S-Maroon</td>
@@ -303,7 +295,7 @@
                                 </tr>
                                 <tr>
                                     <td>
-                                        <div class="img-ph"></div>
+                                        <img src="kaos_army.jpg" class="img-ph" style="object-fit: cover;" alt="Kaos Army">
                                     </td>
                                     <td>Kaos Polos Cotton Combed 30s</td>
                                     <td>M-Army</td>
@@ -313,7 +305,7 @@
                                 </tr>
                                 <tr>
                                     <td>
-                                        <div class="img-ph"></div>
+                                        <img src="hoodie_black.jpg" class="img-ph" style="object-fit: cover;" alt="Hoodie Black">
                                     </td>
                                     <td>Hoodie Premium Fleece</td>
                                     <td>L-Black</td>
@@ -332,57 +324,62 @@
     <!-- Pricing Section -->
     <section id="harga" class="pricing container">
         <h2 class="section-title text-center">Pilih Paket Sesuai Kebutuhan Toko Anda</h2>
-        <p class="text-center subtitle-p">Harga transparan berbasis jumlah chat AI yang digunakan.</p>
+        <p class="text-center subtitle-p">Bayar sekali, pakai selamanya. Harga berbasis kuota balasan AI.</p>
 
         <div class="grid-4">
             <div class="card pricing-card glass">
-                <h3>Trial</h3>
-                <div class="price">Rp 0<span>/ 14 hari</span></div>
+                <h3>🟢 STARTER</h3>
+                <div class="price">Rp 99.000<span>/bulan</span></div>
                 <ul class="pricing-features">
-                    <li><i class="ph ph-check"></i> 1 Nomor WA</li>
-                    <li><i class="ph ph-check"></i> 500 Chat AI</li>
-                    <li><i class="ph ph-check"></i> 10 Produk</li>
+                    <li><i class="ph-fill ph-check-circle"></i> 3.000 AI Credit</li>
+                    <li><i class="ph-fill ph-check-circle"></i> AI WhatsApp</li>
+                    <li><i class="ph-fill ph-check-circle"></i> Knowledge Base</li>
+                    <li><i class="ph-fill ph-check-circle"></i> Follow-up</li>
+                    <li><i class="ph-fill ph-check-circle"></i> Blacklist</li>
+                    <li><i class="ph-fill ph-check-circle"></i> 1 nomor WhatsApp</li>
                 </ul>
-                <a href="#" class="btn btn-outline full-width">Mulai Trial</a>
+                <a href="login.html" target="_blank" class="btn btn-outline full-width">Pilih</a>
             </div>
 
             <div class="card pricing-card glass popular">
-                <div class="popular-badge">Paling Laris</div>
-                <h3>Starter</h3>
-                <div class="price">Rp 99.000<span>/ bln</span></div>
+                <div class="popular-badge">Recommended</div>
+                <h3>🔵 PRO</h3>
+                <div class="price">Rp 199.000<span>/bulan</span></div>
                 <ul class="pricing-features">
-                    <li><i class="ph ph-check"></i> 1 Nomor WA</li>
-                    <li><i class="ph ph-check"></i> 3.000 Chat AI</li>
-                    <li><i class="ph ph-check"></i> 50 Produk</li>
-                    <li><i class="ph ph-check"></i> Invoice di Chat</li>
+                    <li><i class="ph-fill ph-check-circle"></i> 8.000 AI Credit</li>
+                    <li><i class="ph-fill ph-check-circle"></i> Semua Starter</li>
+                    <li><i class="ph-fill ph-check-circle"></i> Deteksi gambar</li>
+                    <li><i class="ph-fill ph-check-circle"></i> Follow-up lanjutan</li>
+                    <li><i class="ph-fill ph-check-circle"></i> 2 nomor WhatsApp</li>
                 </ul>
-                <a href="#" class="btn btn-primary full-width">Pilih Starter</a>
+                <a href="login.html" class="btn btn-primary full-width">Pilih</a>
             </div>
 
             <div class="card pricing-card glass">
-                <h3>Pro</h3>
-                <div class="price">Rp 249.000<span>/ bln</span></div>
+                <h3>🟣 BUSINESS</h3>
+                <div class="price">Rp 399.000<span>/bulan</span></div>
                 <ul class="pricing-features">
-                    <li><i class="ph ph-check"></i> 2 Nomor WA</li>
-                    <li><i class="ph ph-check"></i> 10.000 Chat AI</li>
-                    <li><i class="ph ph-check"></i> Unlimited Produk</li>
-                    <li><i class="ph ph-check"></i> Deteksi Bukti Bayar</li>
-                    <li><i class="ph ph-check"></i> Fitur Upsell AI</li>
+                    <li><i class="ph-fill ph-check-circle"></i> 20.000 AI Credit</li>
+                    <li><i class="ph-fill ph-check-circle"></i> Semua Pro</li>
+                    <li><i class="ph-fill ph-check-circle"></i> Priority processing</li>
+                    <li><i class="ph-fill ph-check-circle"></i> Advanced automation</li>
+                    <li><i class="ph-fill ph-check-circle"></i> Laporan lebih lengkap</li>
+                    <li><i class="ph-fill ph-check-circle"></i> 5 nomor WhatsApp</li>
                 </ul>
-                <a href="#" class="btn btn-outline full-width">Pilih Pro</a>
+                <a href="login.html" class="btn btn-outline full-width">Pilih</a>
             </div>
 
             <div class="card pricing-card glass">
-                <h3>Business</h3>
-                <div class="price">Rp 599.000<span>/ bln</span></div>
+                <h3>🔥 AGENCY</h3>
+                <div class="price">Rp 999.000<span>/bulan</span></div>
                 <ul class="pricing-features">
-                    <li><i class="ph ph-check"></i> 5 Nomor WA</li>
-                    <li><i class="ph ph-check"></i> 30.000 Chat AI</li>
-                    <li><i class="ph ph-check"></i> Multi-CS</li>
-                    <li><i class="ph ph-check"></i> API Access</li>
-                    <li><i class="ph ph-check"></i> Premium Support</li>
+                    <li><i class="ph-fill ph-check-circle"></i> 50.000 AI Credit</li>
+                    <li><i class="ph-fill ph-check-circle"></i> Banyak nomor</li>
+                    <li><i class="ph-fill ph-check-circle"></i> Banyak workspace</li>
+                    <li><i class="ph-fill ph-check-circle"></i> Priority support</li>
+                    <li><i class="ph-fill ph-check-circle"></i> Fitur agency</li>
                 </ul>
-                <a href="#" class="btn btn-outline full-width">Pilih Business</a>
+                <a href="#" class="btn btn-outline full-width" style="pointer-events: none; opacity: 0.6;">Coming Soon</a>
             </div>
         </div>
     </section>
@@ -392,22 +389,7 @@
         <div class="container footer-content">
             <div class="footer-brand">
                 <div class="logo">
-                    <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path
-                            d="M16 2C8.26801 2 2 7.8203 2 15C2 18.9959 3.99349 22.5647 7.08639 24.8711C6.73295 26.6579 5.51862 28.5135 3.39953 29.5663C3.17646 29.6772 3.06497 29.9328 3.1491 30.1634C3.23322 30.394 3.46824 30.5 3.70889 30.5C7.94052 30.5 11.2319 28.3243 12.8717 26.5452C13.8821 26.8385 14.928 27 16 27C23.732 27 30 21.1797 30 14C30 6.8203 23.732 2 16 2Z"
-                            fill="url(#grad2)" />
-                        <circle cx="16" cy="14" r="3" fill="#0F172A" />
-                        <circle cx="10" cy="14" r="2" fill="#0F172A" />
-                        <circle cx="22" cy="14" r="2" fill="#0F172A" />
-                        <line x1="12" y1="14" x2="14" y2="14" stroke="#0F172A" stroke-width="1.5" />
-                        <line x1="18" y1="14" x2="20" y2="14" stroke="#0F172A" stroke-width="1.5" />
-                        <defs>
-                            <linearGradient id="grad2" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
-                                <stop stop-color="#8B5CF6" />
-                                <stop offset="1" stop-color="#06B6D4" />
-                            </linearGradient>
-                        </defs>
-                    </svg>
+                    <img src="favicon.svg" alt="AsistenLapak AI Logo" width="28" height="28">
                     <span>AsistenLapak <strong>AI</strong></span>
                 </div>
                 <p>Revolusi membalas chat pelanggan untuk penjual online mandiri.</p>
