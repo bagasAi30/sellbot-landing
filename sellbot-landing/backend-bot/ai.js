@@ -3,7 +3,7 @@ require('dotenv').config();
 const Groq = require('groq-sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
 
 async function generateAIResponse(userMessage, storeRules = "", products = [], history = [], shippingInfo = "") {
@@ -126,6 +126,11 @@ PENTING: JANGAN PERNAH MENGGUNAKAN TAG <think>! LANGSUNG BERIKAN JAWABAN FINALMU
 
         let content = "";
         
+        if (!groq) {
+            console.warn("⚠️ GROQ_API_KEY belum dikonfigurasi di Environment Variables!");
+            return "Maaf kak, layanan AI sedang dalam pemeliharaan (GROQ_API_KEY belum diset). 🙏";
+        }
+
         try {
             const response = await groq.chat.completions.create({
                 model: "openai/gpt-oss-120b",

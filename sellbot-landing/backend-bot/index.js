@@ -8,6 +8,13 @@ const { searchDestination, calculateShipping } = require('./shipping');
 
 const path = require('path');
 
+process.on('uncaughtException', (err) => {
+    console.error('🔥 UNCAUGHT EXCEPTION:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('🔥 UNHANDLED REJECTION:', reason);
+});
+
 const app = express();
 app.use(cors());
 app.use(express.json());
