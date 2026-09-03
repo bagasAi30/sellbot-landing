@@ -1025,8 +1025,13 @@ async function startWhatsAppBot(userId, onStatus) {
             }
         });
 
-        // Menjalankan Server API
+        // Health check endpoint
+        app.get('/health', (req, res) => {
+            res.status(200).send('OK');
+        });
+
+        // Menjalankan Server API (bind ke 0.0.0.0 agar bisa diakses di dalam Docker)
         const PORT = process.env.PORT || 3001;
-        app.listen(PORT, () => {
-            console.log(`🚀 Server Backend Bot berjalan di http://localhost:${PORT}`);
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`🚀 Server Backend Bot berjalan di port ${PORT}`);
         });
