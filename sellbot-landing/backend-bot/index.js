@@ -1,4 +1,14 @@
 require('dotenv').config();
+
+// Polyfill WebSocket untuk Supabase di Node.js
+if (typeof WebSocket === 'undefined') {
+    try {
+        global.WebSocket = require('ws');
+    } catch (e) {
+        console.warn('⚠️ Gagal memuat polyfill ws:', e.message);
+    }
+}
+
 const express = require('express');
 const cors = require('cors');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage } = require('@whiskeysockets/baileys');
