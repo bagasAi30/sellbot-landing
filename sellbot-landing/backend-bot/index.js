@@ -12,6 +12,7 @@ if (typeof WebSocket === 'undefined') {
 const express = require('express');
 const cors = require('cors');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode');
 const { createClient } = require('@supabase/supabase-js');
 const { generateAIResponse, processImageWithGemini, extractIntentWithGemini } = require('./ai');
 const { searchDestination, calculateShipping } = require('./shipping');
@@ -115,13 +116,18 @@ async function startWhatsAppBot(userId, onStatus) {
     activeSessions[userId] = { sock: sock, status: 'CONNECTING', qr: null, pendingOrder: null };
 
     // Mendengarkan perubahan status koneksi (QR Code, Connected, Disconnected)
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            activeSessions[userId].status = 'SCAN_QR';
-            activeSessions[userId].qr = qr;
-            if (onStatus) onStatus({ type: 'qr', data: qr }); // Kirim QR ke frontend
+            try {
+                const qrBase64 = await qrcode.toDataURL(qr);
+                activeSessions[userId].status = 'SCAN_QR';
+                activeSessions[userId].qr = qrBase64;
+                if (onStatus) onStatus({ type: 'qr', data: qrBase64 }); // Kirim QR ke frontend
+            } catch (err) {
+                console.error('Gagal generate QR:', err);
+            }
         }
 
         if (connection === 'close') {
