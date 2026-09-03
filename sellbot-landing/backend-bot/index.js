@@ -6,9 +6,29 @@ const { createClient } = require('@supabase/supabase-js');
 const { generateAIResponse, processImageWithGemini, extractIntentWithGemini } = require('./ai');
 const { searchDestination, calculateShipping } = require('./shipping');
 
+const path = require('path');
+
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Melayani file-file statis Frontend (HTML, CSS, JS, Gambar)
+const frontendPath = path.join(__dirname, '..');
+app.use(express.static(frontendPath));
+
+// Route ramah pengguna (bisa akses tanpa akhiran .html)
+app.get('/', (req, res) => {
+    res.sendFile(path.join(frontendPath, 'index.html'));
+});
+app.get('/dashboard', (req, res) => {
+    res.sendFile(path.join(frontendPath, 'dashboard.html'));
+});
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(frontendPath, 'admin-dashboard.html'));
+});
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(frontendPath, 'login.html'));
+});
 
 // Inisialisasi Supabase (gunakan Service Role Key untuk bypass RLS di backend)
 const supabaseUrl = process.env.SUPABASE_URL;

@@ -1030,7 +1030,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function checkBotStatus() {
         if (!window.currentUserId) return;
         try {
-            const res = await fetch(`http://localhost:3001/api/bot/status/${window.currentUserId}`);
+            const res = await fetch(`/api/bot/status/${window.currentUserId}`);
             if (!res.ok) throw new Error('Network response was not ok');
             const data = await res.json();
             updateBotUI(data);
@@ -1092,7 +1092,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         btnRunBot.addEventListener('click', async () => {
             showToast('Memulai bot...', 'info');
             try {
-                const res = await fetch('http://localhost:3001/api/bot/start', {
+                const res = await fetch('/api/bot/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId: window.currentUserId })
@@ -1119,7 +1119,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         btnStopBot.addEventListener('click', async () => {
             if (!window.currentUserId) return;
             try {
-                const res = await fetch('http://localhost:3001/api/bot/stop', {
+                const res = await fetch('/api/bot/stop', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId: window.currentUserId })
@@ -1145,7 +1145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!confirm('Anda yakin ingin keluar (logout) dari sesi WhatsApp ini? Anda harus scan ulang QR Code.')) return;
             try {
                 showToast('Sedang menghapus sesi WhatsApp...', 'info');
-                const res = await fetch('http://localhost:3001/api/bot/logout', {
+                const res = await fetch('/api/bot/logout', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId: window.currentUserId })
@@ -1175,7 +1175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         toggleBotActive.addEventListener('change', async (e) => {
             const active = e.target.checked;
             try {
-                await fetch('http://localhost:3001/api/bot/toggle-active', {
+                await fetch('/api/bot/toggle-active', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ active })
@@ -1218,7 +1218,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         try {
-            const response = await fetch('http://localhost:3001/api/admin/update-resi', {
+            const response = await fetch('/api/admin/update-resi', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

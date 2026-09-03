@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================
     async function fetchUsers() {
         try {
-            const res = await fetch('http://localhost:3001/api/admin/users');
+            const res = await fetch('/api/admin/users');
             if (!res.ok) throw new Error('Failed to fetch users');
             const users = await res.json();
 
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btnConfirmBroadcast.innerHTML = '<i class="ph ph-circle-notch"></i> Mengirim...';
             btnConfirmBroadcast.disabled = true;
             btnConfirmBroadcast.disabled = true;
-            fetch('http://localhost:3001/api/admin/broadcast', {
+            fetch('/api/admin/broadcast', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message })
@@ -164,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btnSaveCustomer.disabled = true;
             btnSaveCustomer.disabled = true;
 
-            fetch('http://localhost:3001/api/admin/add-customer', {
+            fetch('/api/admin/add-customer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password: 'password123' }) // Default password
@@ -256,7 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btnSaveEditUser.innerHTML = '<i class="ph ph-circle-notch"></i> Menyimpan...';
             btnSaveEditUser.disabled = true;
 
-            fetch('http://localhost:3001/api/admin/edit-user', {
+            fetch('/api/admin/edit-user', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId, plan, status })
