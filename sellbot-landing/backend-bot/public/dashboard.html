@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - AsistenLapak AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="dashboard.css">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+</head>
+
+<body class="dashboard-body">
+    <!-- Decorative background blobs -->
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+    <div class="blob blob-4"></div>
+
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <img src="favicon.svg" alt="AsistenLapak AI Logo" width="32" height="32">
+                <span>AsistenLapak <strong>AI</strong></span>
+            </div>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="#" class="nav-item active" data-target="overview">
+                <i class="ph ph-squares-four"></i> Overview
+            </a>
+
+            <a href="#" class="nav-item" data-target="knowledge">
+                <i class="ph ph-database"></i> Knowledge Base
+            </a>
+            <a href="#" class="nav-item" data-target="rules">
+                <i class="ph ph-shield-warning"></i> Aturan Nomor
+            </a>
+            <a href="#" class="nav-item" data-target="invoices">
+                <i class="ph ph-receipt"></i> Riwayat Invoice
+            </a>
+            <a href="#" class="nav-item" data-target="followup">
+                <i class="ph ph-clock-counter-clockwise"></i> Follow Up Otomatis
+            </a>
+            <a href="#" class="nav-item" data-target="billing">
+                <i class="ph ph-credit-card"></i> Billing & Plan
+            </a>
+
+        </nav>
+        <div class="sidebar-footer">
+            <a href="index.html" class="nav-item">
+                <i class="ph ph-sign-out"></i> Kembali ke Web
+            </a>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <!-- Overview Section -->
+        <section id="overview" class="dashboard-section active">
+            <header class="section-header">
+                <h2>Overview & Monitoring</h2>
+                <div class="user-profile">
+                    <span>Toko Anda</span>
+                    <div class="avatar-small">TA</div>
+                </div>
+            </header>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-icon">
+                        <i class="ph-fill ph-chat-circle-dots"></i>
+                    </div>
+                    <div class="metric-info">
+                        <h3 id="statTotalChats">0</h3>
+                        <p>Total Chat (Bulan Ini)</p>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon success">
+                        <i class="ph-fill ph-lightning"></i>
+                    </div>
+                    <div class="metric-info">
+                        <h3 id="statAutoReply">92%</h3>
+                        <p>Auto-reply Rate</p>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon warning">
+                        <i class="ph-fill ph-headset"></i>
+                    </div>
+                    <div class="metric-info">
+                        <h3 id="statEscalated">8%</h3>
+                        <p>Escalated to Human</p>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon highlight">
+                        <i class="ph-fill ph-shopping-bag-open"></i>
+                    </div>
+                    <div class="metric-info">
+                        <h3 id="statOrdersClosed">0</h3>
+                        <p>Order Closed</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-widgets">
+                <div class="widget full-width p-0">
+                    <div class="widget-header">
+                        <h3>Riwayat Chat Terbaru</h3>
+                        <a href="#" class="view-all" id="btnViewInbox">Lihat Semua Chat <i class="ph ph-arrow-right"></i></a>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Pelanggan</th>
+                                    <th>Pesan Terakhir</th>
+                                    <th>Status</th>
+                                    <th>Waktu</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="overviewChatsTableBody">
+                                <tr>
+                                    <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 24px;">Memuat riwayat chat...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+
+        <!-- Knowledge Base Section -->
+        <section id="knowledge" class="dashboard-section">
+            <header class="section-header">
+                <h2>Knowledge Base Produk</h2>
+                <div class="header-actions">
+                    <button class="btn btn-outline"><i class="ph ph-file-csv"></i> Import CSV</button>
+                    <button class="btn btn-primary" onclick="openAddProductModal()"><i class="ph ph-plus"></i> Tambah Produk</button>
+                    <button class="btn btn-primary" id="btnSaveAll"><i class="ph ph-floppy-disk"></i> Simpan Semua</button>
+                </div>
+            </header>
+
+            <!-- Product Table -->
+            <div class="widget full-width p-0">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Gambar</th>
+                                <th>Nama Produk</th>
+                                <th>Varian</th>
+                                <th>Harga</th>
+                                <th>Berat</th>
+                                <th>Stok</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productsTableBody">
+                            <tr>
+                                <td><div class="img-ph"></div></td>
+                                <td>Kaos Premium</td>
+                                <td>S, M, L, XL</td>
+                                <td>Rp 200.000</td>
+                                <td>200g</td>
+                                <td><span class="stock-badge success">122</span></td>
+                                <td><i class="ph ph-pencil-simple action-icon" onclick="editProduct(1)"></i> <i class="ph ph-trash action-icon" onclick="deleteRow(1)"></i></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Settings & Configuration Cards -->
+            <div class="kb-config-grid">
+
+                <!-- Card: WhatsApp Integration -->
+                <div class="kb-card wa-card">
+                    <div class="kb-card-header">
+                        <div class="kb-card-title-group">
+                            <div class="kb-card-icon wa-icon">
+                                <i class="ph-fill ph-whatsapp-logo"></i>
+                            </div>
+                            <div>
+                                <h3 class="kb-card-title">Integrasi WhatsApp</h3>
+                                <p class="kb-card-subtitle">Hubungkan bot AI ke nomor WhatsApp toko Anda via scan QR</p>
+                            </div>
+                        </div>
+                        <div id="waConnectionBadge" class="wa-status-badge disconnected">
+                            <span class="wa-status-dot"></span>
+                            <span class="wa-status-text">Memeriksa...</span>
+                        </div>
+                    </div>
+
+                    <!-- Steps Guide -->
+                    <div class="kb-steps-box">
+                        <div class="kb-steps-title">
+                            <i class="ph-fill ph-list-numbers"></i>
+                            Tahapan Menautkan Bot ke WhatsApp
+                        </div>
+                        <ol class="kb-steps-list">
+                            <li>Pastikan server backend SellBot AI sudah berjalan.</li>
+                            <li>Buka aplikasi <strong>WhatsApp</strong> di HP Anda.</li>
+                            <li>Masuk ke <strong>Perangkat Tertaut</strong> (Android: Titik Tiga — iOS: Pengaturan).</li>
+                            <li>Tekan <strong>Tautkan Perangkat</strong>, lalu arahkan kamera ke QR Code di bawah.</li>
+                            <li>Setelah tersambung, bot akan aktif otomatis membalas pesan pelanggan 🎉</li>
+                        </ol>
+                    </div>
+
+                    <!-- QR + Controls -->
+                    <div class="wa-main-layout">
+                        <!-- QR Panel -->
+                        <div class="wa-qr-panel">
+                            <div id="waQrLoading" class="wa-qr-state" style="display:none;">
+                                <i class="ph ph-circle-notch" style="font-size:36px;color:var(--primary);animation:spin 1s linear infinite;"></i>
+                                <span>Memuat QR Code...</span>
+                            </div>
+                            <img id="waQrImage" src="" alt="WhatsApp QR Code" class="wa-qr-img" style="display:none;" />
+                            <div id="waConnectedState" class="wa-qr-state" style="display:none;color:#22c55e;">
+                                <i class="ph-fill ph-check-circle" style="font-size:52px;"></i>
+                                <strong>WhatsApp Terhubung!</strong>
+                                <span style="font-size:12px;color:var(--text-secondary);">Bot aktif & siap melayani pelanggan</span>
+                            </div>
+                            <div id="waDisconnectedState" class="wa-qr-state">
+                                <i class="ph ph-qr-code" style="font-size:44px;opacity:0.3;"></i>
+                                <span>Klik "Jalankan Bot" untuk generate QR</span>
+                            </div>
+                        </div>
+
+                        <!-- Controls Panel -->
+                        <div class="wa-controls-panel">
+                            <div class="wa-toggle-row">
+                                <div class="wa-toggle-info">
+                                    <span class="wa-toggle-label">Auto-Reply AI Bot</span>
+                                    <span class="wa-toggle-desc">Aktifkan/nonaktifkan balasan otomatis AI ke pelanggan.</span>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="toggleBotActive" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+
+                            <div class="wa-action-btns">
+                                <button type="button" class="btn wa-btn-run" id="btnRunBot">
+                                    <i class="ph-fill ph-play"></i> Jalankan Bot
+                                </button>
+                                <button type="button" class="btn wa-btn-stop" id="btnStopBot" title="Matikan Sementara">
+                                    <i class="ph-fill ph-stop-circle"></i> Matikan Bot
+                                </button>
+                                <button type="button" class="btn btn-outline" id="btnRelinkBot" title="Keluar / Tautkan Ulang" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.3);">
+                                    <i class="ph ph-plugs"></i> Tautkan Ulang
+                                </button>
+                                <button type="button" class="btn btn-outline wa-btn-refresh" id="btnRefreshQR" title="Refresh Status">
+                                    <i class="ph ph-arrows-clockwise"></i>
+                                </button>
+                            </div>
+
+                            <div id="botStatusMessage" class="wa-status-msg">
+                                <i class="ph ph-info"></i>
+                                <span>Tekan <strong>Jalankan Bot</strong> untuk memulai sesi WhatsApp baru.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card: AI Persona -->
+                <div class="kb-card">
+                    <div class="kb-card-header">
+                        <div class="kb-card-title-group">
+                            <div class="kb-card-icon" style="background: #F3E8FF; border-color: #E9D5FF;">
+                                <i class="ph-fill ph-sparkle" style="color: #9333EA;"></i>
+                            </div>
+                            <div>
+                                <h3 class="kb-card-title">AI Persona & System Prompt</h3>
+                                <p class="kb-card-subtitle">Atur karakter, tone komunikasi, dan gaya bicara AI toko Anda</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="kb-form-group">
+                        <label class="kb-label">System Prompt</label>
+                        <textarea id="systemPromptInput" class="kb-textarea" rows="7" placeholder="Contoh: Kamu adalah asisten CS ramah untuk toko fashion kami. Selalu sapa pelanggan dengan 'Kak'. Gunakan bahasa santai namun profesional. Jangan pernah memberikan diskon tanpa persetujuan admin..."></textarea>
+                        <span class="kb-hint"><i class="ph ph-lightbulb"></i> Instruksikan AI soal cara berbicara, batasan yang harus diikuti, dan tone percakapan yang diinginkan.</span>
+                    </div>
+                    <div class="kb-card-footer">
+                        <button id="btnSaveSystemPrompt" class="btn btn-primary"><i class="ph ph-floppy-disk"></i> Simpan Konfigurasi</button>
+                    </div>
+                </div>
+
+                <!-- Card: Product Knowledge Base -->
+                <div class="kb-card ai-card">
+                    <div class="kb-card-header">
+                        <div class="kb-card-title-group">
+                            <div class="kb-card-icon ai-icon-container">
+                                <i class="ph-fill ph-sparkle"></i>
+                            </div>
+                            <div>
+                                <h3 class="kb-card-title">Product Knowledge Base</h3>
+                                <p class="kb-card-subtitle">Teks konteks yang digunakan AI menjawab pertanyaan produk</p>
+                            </div>
+                        </div>
+                        <button class="btn btn-outline" onclick="document.getElementById('docInput').click()" style="white-space:nowrap;flex-shrink:0;">
+                            <i class="ph ph-upload-simple"></i> Upload Dokumen
+                        </button>
+                    </div>
+                    <div class="kb-form-group">
+                        <label class="kb-label">Detailed Context</label>
+                        <textarea id="knowledgeInput" class="kb-textarea" rows="7" placeholder="Paste spesifikasi produk lengkap, tabel harga, FAQ, prosedur komplain, info pengiriman, dan informasi penting lainnya di sini..."></textarea>
+                        <span class="kb-hint"><i class="ph ph-lightbulb"></i> AI akan mencari informasi ini saat menjawab pertanyaan yang tidak tercakup di tabel produk di atas.</span>
+                    </div>
+                    <input type="file" id="docInput" style="display:none;" accept=".txt,.pdf,.docx,.csv">
+                    <div class="kb-card-footer">
+                        <button id="btnSaveKnowledge" class="btn ai-btn">Simpan Knowledge</button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Rules Section -->
+        <section id="rules" class="dashboard-section">
+            <header class="section-header">
+                <h2>Pengaturan Nomor & Aturan Chat</h2>
+            </header>
+
+            <div class="kb-config-grid">
+                <!-- Blocked Numbers -->
+                <div class="kb-card">
+                    <div class="kb-card-header">
+                        <div class="kb-card-title-group">
+                            <div class="kb-card-icon" style="background:#FEF2F2; border-color:#FECACA;">
+                                <i class="ph-fill ph-user-minus" style="color:#DC2626;"></i>
+                            </div>
+                            <div>
+                                <h3 class="kb-card-title">Nomor Diblokir (Spam)</h3>
+                                <p class="kb-card-subtitle">AI tidak akan membalas pesan dari nomor di daftar ini</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="number-rule-input-group">
+                        <input type="text" id="inputNewBlockedNumber" class="form-control" placeholder="Masukkan nomor (contoh: 6281234567890)" onkeypress="if(event.key==='Enter') addBlockedNumber()">
+                        <button class="btn btn-primary" onclick="addBlockedNumber()" style="background: #DC2626; border-color: #DC2626; white-space: nowrap;">
+                            <i class="ph ph-plus"></i> Tambah
+                        </button>
+                    </div>
+                    <span class="kb-hint" style="margin-bottom: 8px; display: block;"><i class="ph ph-lightbulb"></i> Gunakan format 62xxx (tanpa tanda + atau 0 di depan).</span>
+
+                    <!-- Listing Area -->
+                    <div class="number-listing-container">
+                        <div id="blockedNumbersList" class="number-listing-items">
+                            <div class="empty-number-state" style="text-align: center; padding: 20px; color: var(--text-secondary); font-size: 13px;">
+                                <i class="ph ph-shield-check" style="font-size: 24px; display: block; margin-bottom: 4px; opacity: 0.5;"></i>
+                                Belum ada nomor yang diblokir
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="kb-card-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                        <span id="blockedCountBadge" style="font-size: 12px; color: var(--text-secondary);">Total: 0 nomor</span>
+                        <button id="btnSaveBlocked" class="btn btn-outline btn-small" onclick="saveBlockedNumbersToDB()">
+                            <i class="ph ph-floppy-disk"></i> Simpan Perubahan
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Special Numbers / Human Handoff -->
+                <div class="kb-card">
+                    <div class="kb-card-header">
+                        <div class="kb-card-title-group">
+                            <div class="kb-card-icon" style="background:#FEF3C7; border-color:#FDE68A;">
+                                <i class="ph-fill ph-user-focus" style="color:#D97706;"></i>
+                            </div>
+                            <div>
+                                <h3 class="kb-card-title">Nomor Khusus / Admin</h3>
+                                <p class="kb-card-subtitle">Nomor yang diabaikan AI untuk di-handle manual</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="number-rule-input-group">
+                        <input type="text" id="inputNewSpecialNumber" class="form-control" placeholder="Masukkan nomor (contoh: 628111222333)" onkeypress="if(event.key==='Enter') addSpecialNumber()">
+                        <button class="btn btn-primary" onclick="addSpecialNumber()" style="background: #D97706; border-color: #D97706; white-space: nowrap;">
+                            <i class="ph ph-plus"></i> Tambah
+                        </button>
+                    </div>
+                    <span class="kb-hint" style="margin-bottom: 8px; display: block;"><i class="ph ph-lightbulb"></i> AI tidak akan membalas chat dari nomor-nomor ini.</span>
+
+                    <!-- Listing Area -->
+                    <div class="number-listing-container">
+                        <div id="specialNumbersList" class="number-listing-items">
+                            <div class="empty-number-state" style="text-align: center; padding: 20px; color: var(--text-secondary); font-size: 13px;">
+                                <i class="ph ph-user-gear" style="font-size: 24px; display: block; margin-bottom: 4px; opacity: 0.5;"></i>
+                                Belum ada nomor admin / khusus
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="kb-card-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                        <span id="specialCountBadge" style="font-size: 12px; color: var(--text-secondary);">Total: 0 nomor</span>
+                        <button id="btnSaveSpecial" class="btn btn-outline btn-small" onclick="saveSpecialNumbersToDB()">
+                            <i class="ph ph-floppy-disk"></i> Simpan Perubahan
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Follow Up Section -->
+        <section id="followup" class="dashboard-section">
+            <header class="section-header">
+                <h2>Follow Up Otomatis</h2>
+                <div class="header-actions">
+                    <button class="btn btn-primary" onclick="openModal('addFollowUpModal')"><i class="ph ph-plus"></i> Tambah Nomor</button>
+                    <span class="status-badge ai">
+                        <i class="ph-fill ph-sparkle"></i> Smart Auto Follow Up
+                    </span>
+                </div>
+            </header>
+
+            <div class="kb-config-grid">
+                <!-- Auto Follow Up Setting -->
+                <div class="kb-card full-width ai-card">
+                    <div class="kb-card-header" style="justify-content: space-between; align-items: center; display: flex;">
+                        <div class="kb-card-title-group">
+                            <div class="kb-card-icon ai-icon-container">
+                                <i class="ph-fill ph-paper-plane-right"></i>
+                            </div>
+                            <div>
+                                <h3 class="kb-card-title">Pengaturan Template Follow Up</h3>
+                                <p class="kb-card-subtitle">Atur pesan yang akan dikirim otomatis oleh AI secara bertahap.</p>
+                            </div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggleAutoFollowUp" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; padding: 20px 0;">
+                        <!-- Day 1 -->
+                        <div class="kb-form-group">
+                            <label class="kb-label">Follow Up H+1 (Day 1)</label>
+                            <textarea id="followUpDay1" class="kb-textarea" rows="4" placeholder="Halo kak, apakah ada yang bisa dibantu terkait pesanannya? Kami masih menyimpan barangnya untuk kakak 😊"></textarea>
+                            <span class="kb-hint"><i class="ph ph-lightbulb"></i> Dikirim setelah 24 jam.</span>
+                        </div>
+                        <!-- Day 2 -->
+                        <div class="kb-form-group">
+                            <label class="kb-label">Follow Up H+2 (Day 2)</label>
+                            <textarea id="followUpDay2" class="kb-textarea" rows="4" placeholder="Halo kak, mengingatkan kembali untuk pesanannya. Apabila ada kendala pembayaran bisa infokan ke kami ya 🙏"></textarea>
+                            <span class="kb-hint"><i class="ph ph-lightbulb"></i> Dikirim setelah 48 jam.</span>
+                        </div>
+                        <!-- Day 3 -->
+                        <div class="kb-form-group">
+                            <label class="kb-label">Follow Up H+3 (Day 3)</label>
+                            <textarea id="followUpDay3" class="kb-textarea" rows="4" placeholder="Halo kak, mohon maaf jika belum ada konfirmasi, pesanan akan kami batalkan otomatis besok. Terima kasih kak!"></textarea>
+                            <span class="kb-hint"><i class="ph ph-lightbulb"></i> Dikirim setelah 72 jam.</span>
+                        </div>
+                    </div>
+                    
+                    <div class="kb-card-footer">
+                        <button id="btnSaveFollowUpConfig" class="btn btn-primary" onclick="saveFollowUpConfig()"><i class="ph ph-floppy-disk"></i> Simpan Pengaturan</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Follow Up Queue -->
+            <div class="widget full-width p-0" style="margin-top: 24px;">
+                <div class="widget-header">
+                    <h3>Antrean Follow Up</h3>
+                    <div class="filters">
+                        <input type="text" id="inputSearchFollowUp" placeholder="Cari Nomor..." class="form-control" style="width: 220px;">
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Pelanggan / Nomor</th>
+                                <th>Tahap (Day)</th>
+                                <th>Waktu Kirim Berikutnya</th>
+                                <th>Status</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="followUpTableBody">
+                            <tr>
+                                <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 24px;">Belum ada antrean follow up.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Invoices Section -->
+        <section id="invoices" class="dashboard-section">
+            <header class="section-header">
+                <h2>Riwayat Invoice</h2>
+                <div class="filters">
+                    <input type="text" id="inputSearchInvoice" placeholder="Cari No Invoice / Pelanggan..." class="form-control" style="width: 280px;">
+                </div>
+            </header>
+
+            <div class="widget full-width p-0">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>No Invoice</th>
+                                <th>Pelanggan</th>
+                                <th>Total</th>
+                                <th>Metode</th>
+                                <th>Status Bayar</th>
+                                <th>Tanggal</th>
+                            </tr>
+                        </thead>
+                        <tbody id="invoicesTableBody">
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 24px;">Belum ada riwayat invoice.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Billing Section -->
+        <section id="billing" class="dashboard-section">
+            <header class="section-header">
+                <h2>Billing & Subscription</h2>
+                <div class="header-actions">
+                    <span class="status-badge ai" style="font-size: 14px;" id="currentPlanBadge"><i class="ph-fill ph-check-circle"></i>
+                        Current Plan: Trial</span>
+                </div>
+            </header>
+
+            <div class="pricing-grid">
+                
+                <!-- Starter -->
+                <div class="pricing-card">
+                    <h3>STARTER</h3>
+                    <div class="price">
+                        Rp 99.000 <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">/bulan</span>
+                    </div>
+                    <ul class="features">
+                        <li><i class="ph-fill ph-check-circle"></i> 3.000 AI Credit</li>
+                        <li><i class="ph-fill ph-check-circle"></i> AI WhatsApp</li>
+                        <li><i class="ph-fill ph-check-circle"></i> Knowledge Base</li>
+                        <li><i class="ph-fill ph-check-circle"></i> Follow-up</li>
+                        <li><i class="ph-fill ph-check-circle"></i> Blacklist</li>
+                        <li><i class="ph-fill ph-check-circle"></i> 1 nomor WhatsApp</li>
+                    </ul>
+                    <button class="btn btn-outline full-width" style="margin-top:20px;" onclick="openModal('checkoutModal')">Pilih Paket</button>
+                </div>
+
+                <!-- Pro -->
+                <div class="pricing-card featured">
+                    <div class="popular-badge">Recommended</div>
+                    <h3>PRO</h3>
+                    <div class="price">
+                        Rp 199.000 <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">/bulan</span>
+                    </div>
+                    <ul class="features">
+                        <li><i class="ph-fill ph-check-circle"></i> 8.000 AI Credit</li>
+                        <li><i class="ph-fill ph-check-circle"></i> Semua Starter</li>
+                        <li><i class="ph-fill ph-check-circle"></i> Deteksi gambar</li>
+                        <li><i class="ph-fill ph-check-circle"></i> Voice</li>
+                        <li><i class="ph-fill ph-check-circle"></i> Follow-up lanjutan</li>
+                        <li><i class="ph-fill ph-check-circle"></i> 2 nomor WhatsApp</li>
+                    </ul>
+                    <button class="btn btn-primary full-width" style="margin-top:20px;" onclick="openModal('checkoutModal')">Pilih Paket</button>
+                </div>
+
+                <!-- Business -->
+                <div class="pricing-card">
+                    <h3>BUSINESS</h3>
+                    <div class="price">
+                        Rp 399.000 <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">/bulan</span>
+                    </div>
+                    <ul class="features">
+                        <li><i class="ph-fill ph-check-circle"></i> 20.000 AI Credit</li>
+                        <li><i class="ph-fill ph-check-circle"></i> Semua Pro</li>
+                        <li><i class="ph-fill ph-check-circle"></i> Priority processing</li>
+                        <li><i class="ph-fill ph-check-circle"></i> Advanced automation</li>
+                        <li><i class="ph-fill ph-check-circle"></i> Laporan lebih lengkap</li>
+                        <li><i class="ph-fill ph-check-circle"></i> 5 nomor WhatsApp</li>
+                    </ul>
+                    <button class="btn btn-outline full-width" style="margin-top:20px;" onclick="openModal('checkoutModal')">Pilih Paket</button>
+                </div>
+
+                <!-- Agency -->
+                <div class="pricing-card">
+                    <h3>🔥 AGENCY</h3>
+                    <div class="price">
+                        Rp 999.000 <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">/bulan</span>
+                    </div>
+                    <ul class="features">
+                        <li><i class="ph-fill ph-check-circle"></i> 50.000 AI Credit</li>
+                        <li><i class="ph-fill ph-check-circle"></i> Banyak nomor</li>
+                        <li><i class="ph-fill ph-check-circle"></i> Banyak workspace</li>
+                        <li><i class="ph-fill ph-check-circle"></i> Priority support</li>
+                        <li><i class="ph-fill ph-check-circle"></i> Fitur agency</li>
+                    </ul>
+                    <button class="btn btn-outline full-width" style="margin-top:20px;" onclick="openModal('checkoutModal')">Pilih Paket</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Modals -->
+    <!-- Product Modal -->
+    <div class="modal-overlay" id="productModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="productModalTitle">Tambah Produk</h3>
+                <button class="modal-close" onclick="closeModal('productModal')">&times;</button>
+            </div>
+            <input type="hidden" id="prodId" value="">
+            <div class="form-group">
+                <label>Gambar Produk</label>
+                <input type="file" class="form-control" id="prodImage" accept="image/*">
+            </div>
+            <div class="form-group" style="margin-top: 16px;">
+                <label>Nama Produk</label>
+                <input type="text" class="form-control" id="prodName" placeholder="Contoh: Kaos Polos">
+            </div>
+            <div class="form-group" style="margin-top: 16px;">
+                <label>Varian (Pisahkan dengan koma)</label>
+                <input type="text" class="form-control" id="prodVariant" placeholder="S, M, L">
+            </div>
+            <div class="form-group" style="margin-top: 16px;">
+                <label>Harga</label>
+                <input type="text" class="form-control" id="prodPrice" placeholder="Rp 50.000">
+            </div>
+            <div class="form-group" style="margin-top: 16px;">
+                <label>Berat (gram)</label>
+                <input type="number" class="form-control" id="prodWeight" placeholder="Contoh: 500">
+            </div>
+            <div class="form-group" style="margin-top: 16px;">
+                <label>Stok</label>
+                <input type="number" class="form-control" id="prodStock" placeholder="10">
+            </div>
+            <button class="btn btn-primary full-width" style="margin-top: 24px;" onclick="saveProduct()">Simpan Produk</button>
+        </div>
+    </div>
+
+    <!-- Checkout Modal -->
+    <div class="modal-overlay" id="checkoutModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Selesaikan Pembayaran</h3>
+                <button class="modal-close" onclick="closeModal('checkoutModal')">&times;</button>
+            </div>
+            <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">Pilih metode pembayaran untuk berlangganan layanan AsistenLapak AI.</p>
+
+            <div class="payment-methods" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px;">
+                <label class="payment-option"
+                    style="display: flex; align-items: center; gap: 14px; padding: 14px; border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; background: #F8FAFC;">
+                    <input type="radio" name="paymentMethod" value="qris" checked style="accent-color: var(--primary); width: 18px; height: 18px;">
+                    <div style="flex-grow: 1;">
+                        <strong style="display: block; font-size: 15px; color: var(--text-primary);">QRIS Instan</strong>
+                        <span style="font-size: 12px; color: var(--text-secondary);">Bayar cepat via GoPay, OVO, Dana, ShopeePay, BCA/Mandiri QR</span>
+                    </div>
+                </label>
+                <label class="payment-option"
+                    style="display: flex; align-items: center; gap: 14px; padding: 14px; border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; background: #F8FAFC;">
+                    <input type="radio" name="paymentMethod" value="bca" style="accent-color: var(--primary); width: 18px; height: 18px;">
+                    <div style="flex-grow: 1;">
+                        <strong style="display: block; font-size: 15px; color: var(--text-primary);">BCA Virtual Account</strong>
+                        <span style="font-size: 12px; color: var(--text-secondary);">Transfer otomatis terverifikasi via BCA Mobile / ATM</span>
+                    </div>
+                </label>
+                <label class="payment-option"
+                    style="display: flex; align-items: center; gap: 14px; padding: 14px; border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; background: #F8FAFC;">
+                    <input type="radio" name="paymentMethod" value="bni" style="accent-color: var(--primary); width: 18px; height: 18px;">
+                    <div style="flex-grow: 1;">
+                        <strong style="display: block; font-size: 15px; color: var(--text-primary);">BNI Virtual Account</strong>
+                        <span style="font-size: 12px; color: var(--text-secondary);">Transfer otomatis terverifikasi via BNI Mobile / ATM</span>
+                    </div>
+                </label>
+            </div>
+
+            <button class="btn btn-primary full-width" onclick="processPayment()">Konfirmasi Pembayaran</button>
+        </div>
+    </div>
+
+    <!-- Trial Expired Modal -->
+    <div class="modal-overlay" id="trialExpiredModal">
+        <div class="modal-content" style="text-align: center;">
+            <div style="font-size: 44px; color: var(--warning); margin-bottom: 14px;">
+                <i class="ph-fill ph-warning-circle"></i>
+            </div>
+            <h3 style="margin-bottom: 10px; font-size: 20px;">Masa Uji Coba Berakhir</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 22px; line-height: 1.5; font-size: 14px;">
+                Batas masa uji coba gratis Anda telah selesai.<br>
+                Silakan pilih paket langganan untuk terus menikmati asisten AI toko online Anda 24/7.
+            </p>
+            <button class="btn btn-primary full-width"
+                onclick="closeModal('trialExpiredModal'); openModal('checkoutModal');">
+                Tingkatkan Paket Sekarang
+            </button>
+        </div>
+    </div>
+
+    <!-- Add Follow Up Modal -->
+    <div class="modal-overlay" id="addFollowUpModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Tambah Antrean Follow Up</h3>
+                <button class="modal-close" onclick="closeModal('addFollowUpModal')">&times;</button>
+            </div>
+            <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">Masukkan nomor pelanggan yang ingin di-follow up secara manual.</p>
+
+            <div class="form-group">
+                <label>Nomor WhatsApp</label>
+                <input type="text" class="form-control" id="manualFollowUpNumber" placeholder="Contoh: 6281234567890">
+                <span class="kb-hint" style="margin-top: 6px;"><i class="ph ph-lightbulb"></i> Gunakan awalan 62.</span>
+            </div>
+            <div class="form-group" style="margin-top: 16px;">
+                <label>Mulai dari Tahap (Day)</label>
+                <select class="form-control" id="manualFollowUpDay">
+                    <option value="1">Day 1 (H+1)</option>
+                    <option value="2">Day 2 (H+2)</option>
+                    <option value="3">Day 3 (H+3)</option>
+                </select>
+            </div>
+            
+            <button class="btn btn-primary full-width" style="margin-top: 24px;" onclick="addManualFollowUp()">Tambahkan ke Antrean</button>
+        </div>
+    </div>
+
+    <!-- Chat History Detail Modal -->
+    <div class="modal-overlay" id="chatHistoryModal">
+        <div class="modal-content" style="max-width: 620px;">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div class="avatar-small" id="chatModalAvatar">CS</div>
+                    <div>
+                        <h3 id="chatModalCustomerName" style="margin: 0; font-size: 17px;">Detail Percakapan</h3>
+                        <span id="chatModalCustomerPhone" style="font-size: 13px; color: var(--text-secondary);">6281234567890</span>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeModal('chatHistoryModal')">&times;</button>
+            </div>
+            <div id="chatModalMessagesContainer" style="max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 16px; background: #F8FAFC; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 16px;">
+                <div style="text-align: center; color: var(--text-secondary); padding: 20px;">Memuat percakapan...</div>
+            </div>
+            <div style="display: flex; justify-content: flex-end;">
+                <button class="btn btn-outline" onclick="closeModal('chatHistoryModal')">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Input Resi Modal -->
+    <div class="modal-overlay" id="inputResiModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Input Resi Pengiriman</h3>
+                <button class="modal-close" onclick="closeModal('inputResiModal')">&times;</button>
+            </div>
+            <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">Masukkan resi pengiriman. Bot otomatis akan mengirim notifikasi ke WhatsApp pelanggan.</p>
+
+            <input type="hidden" id="resiInvoiceId">
+            <input type="hidden" id="resiCustomerPhone">
+
+            <div class="form-group">
+                <label>Ekspedisi / Kurir</label>
+                <input type="text" class="form-control" id="resiCourier" placeholder="Contoh: J&T EXPRESS, JNE REG">
+            </div>
+            <div class="form-group" style="margin-top: 16px;">
+                <label>Nomor Resi</label>
+                <input type="text" class="form-control" id="resiNumber" placeholder="Contoh: JP293847583">
+            </div>
+            
+            <button class="btn btn-primary full-width" style="margin-top: 24px;" id="btnSubmitResi" onclick="submitResi()">Kirim Resi ke Pelanggan</button>
+        </div>
+    </div>
+
+    <!-- Hidden Inputs -->
+    <input type="file" id="qrisInput" style="display: none;" accept="image/*">
+    <input type="file" id="csvInput" style="display: none;" accept=".csv">
+    <input type="file" id="docInput" style="display: none;" accept=".pdf,.doc,.docx,.txt">
+
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
+
+    <script src="dashboard.js"></script>
+</body>
+
+</html>

@@ -12,8 +12,16 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Melayani file-file statis Frontend (HTML, CSS, JS, Gambar)
-const frontendPath = path.join(__dirname, '..');
+const fs = require('fs');
+
+// Melayani file-file statis Frontend (cek ./public dulu, lalu .. atau ../..)
+let frontendPath = path.join(__dirname, 'public');
+if (!fs.existsSync(path.join(frontendPath, 'index.html'))) {
+    frontendPath = path.join(__dirname, '..');
+}
+if (!fs.existsSync(path.join(frontendPath, 'index.html'))) {
+    frontendPath = path.join(__dirname, '../..');
+}
 app.use(express.static(frontendPath));
 
 // Route ramah pengguna (bisa akses tanpa akhiran .html)
