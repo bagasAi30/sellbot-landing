@@ -131,7 +131,8 @@ async function startWhatsAppBot(userId, onStatus) {
         }
 
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+            const isLoggedOut = (lastDisconnect.error)?.output?.statusCode === DisconnectReason.loggedOut;
+            const shouldReconnect = !isLoggedOut && !sock.isManuallyStopped;
             console.log(`Koneksi tertutup untuk ${userId}. Reconnect: ${shouldReconnect}`);
             delete activeSessions[userId];
             if (shouldReconnect) {
@@ -582,7 +583,27 @@ async function startWhatsAppBot(userId, onStatus) {
                         const destLabel = target.label || target.subdistrict_name || target.city_name || queryLokasi;
 
                         console.log(`📍 Destinasi ditemukan: ${destLabel} (ID: ${destId})`);
-                        const shippingRates = await calculateShipping(destId, 1000);
+                        
+                        // Cari qty dan berat sebelum hitung ongkir
+                        const allHistTextShip = history.map(h => h.message || '').join(' ').toLowerCase();
+                        const allHistRawShip = history.map(h => h.message || '').join('\n');
+                        let foundProduct = null, foundQty = 1;
+                        if (products && products.length > 0) {
+                            foundProduct = products.find(p => {
+                                const pName = (p.name || p.title || '').toLowerCase();
+                                return pName.length > 2 && allHistTextShip.includes(pName);
+                            });
+                        }
+                        if (foundProduct) {
+                            const qtyM2 = allHistTextShip.match(/(\d+)\s*pcs/i) || allHistTextShip.match(/(\d+)\s*buah/i) || allHistTextShip.match(/(\d+)\s*kg/i);
+                            if (qtyM2) foundQty = parseInt(qtyM2[1]);
+                        }
+                        
+                        const unitWeight = foundProduct?.weight || 1000;
+                        const totalWeight = foundQty * unitWeight;
+                        const beratKg = Math.ceil(totalWeight / 1000);
+
+                        const shippingRates = await calculateShipping(destId, totalWeight);
 
                         if (shippingRates && shippingRates.length > 0) {
                             const filteredRates = shippingRates.filter(r => {
@@ -599,24 +620,13 @@ async function startWhatsAppBot(userId, onStatus) {
                                 const kurir = (n.includes('jnt') || n.includes('j&t')) ? 'J&T EXPRESS' : 'JNE REG';
                                 return `• *${kurir}*: Rp ${harga} (est. ${etd} hari)`;
                             }).join('\n');
-                            aiReply = `Ongkir ke *${destLabel}* (berat 1 kg):\n\n${listOngkir}\n\nMau pilih *JNE REG* atau *J&T* kak? 😊`;
+                            aiReply = `Ongkir ke *${destLabel}* (berat ${beratKg} kg):\n\n${listOngkir}\n\nMau pilih *JNE REG* atau *J&T* kak? 😊`;
 
                             // =============================================
                             // Cache order context untuk SELECT_COURIER nanti
                             // =============================================
                             try {
-                                const allHistTextShip = history.map(h => h.message || '').join(' ').toLowerCase();
-                                const allHistRawShip = history.map(h => h.message || '').join('\n');
-                                let foundProduct = null, foundQty = 1;
-                                if (products && products.length > 0) {
-                                    foundProduct = products.find(p => {
-                                        const pName = (p.name || p.title || '').toLowerCase();
-                                        return pName.length > 2 && allHistTextShip.includes(pName);
-                                    });
-                                }
                                 if (foundProduct) {
-                                    const qtyM2 = allHistTextShip.match(/(\d+)\s*pcs/i) || allHistTextShip.match(/(\d+)\s*buah/i);
-                                    if (qtyM2) foundQty = parseInt(qtyM2[1]);
                                     const namaM2 = (textMessage + '\n' + allHistRawShip).match(/nama\s+([a-zA-Z\s]+?)(?:\s*,|\s+alamat|\s+jl|\s+kec|\n|$)/i);
                                     const foundNama = namaM2 ? namaM2[1].trim() : customerName;
                                     const alamatSrc2 = textMessage + '\n' + allHistRawShip;
@@ -653,6 +663,34 @@ async function startWhatsAppBot(userId, onStatus) {
                 let autoShippingRates = null;
                 let autoDestLabel = "";
 
+                const allMessages = history.map(h => h.message || '').join(' ').toLowerCase();
+                const hasProductInHistory = allMessages.includes('kaos') || allMessages.includes('produk') || allMessages.includes('order') || allMessages.includes('pesan');
+                const hasAddressInMsg = /kec(?:amatan)?|jalan|jl\.|alamat/i.test(textMessage);
+                const hasNameInMsg = /nama\s+\w+/i.test(textMessage);
+
+                // Cek produk & kuantitas terlebih dahulu agar berat bisa dihitung
+                let produkOrdered = "Produk";
+                let hargaProduk = 0;
+                let unitWeight = 1000;
+                let foundProductObj = null;
+                if (products && products.length > 0) {
+                    foundProductObj = products.find(p => allMessages.includes((p.name || p.title || '').toLowerCase()));
+                    if (foundProductObj) {
+                        produkOrdered = foundProductObj.name || foundProductObj.title;
+                        hargaProduk = Number(foundProductObj.price || 0);
+                        unitWeight = foundProductObj.weight || 1000;
+                    } else {
+                        produkOrdered = products[0].name || products[0].title;
+                        hargaProduk = Number(products[0].price || 0);
+                        unitWeight = products[0].weight || 1000;
+                    }
+                }
+                const qtyMatch = allMessages.match(/(\d+)\s*pcs/i) || allMessages.match(/(\d+)\s*buah/i) || allMessages.match(/(\d+)\s*kg/i);
+                const qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
+                const totalBarang = hargaProduk * qty;
+                const totalWeight = qty * unitWeight;
+                const beratKg = Math.ceil(totalWeight / 1000);
+
                 try {
                     const queryLokasi = intentData.location; 
                     if (queryLokasi && queryLokasi.length >= 3) {
@@ -662,10 +700,10 @@ async function startWhatsAppBot(userId, onStatus) {
                             const target = destinations[0];
                             const destId = target.id || target.subdistrict_id || target.city_id;
                             autoDestLabel = target.label || target.subdistrict_name || target.city_name || queryLokasi;
-                            const rates = await calculateShipping(destId, 1000);
+                            const rates = await calculateShipping(destId, totalWeight);
                             if (rates && rates.length > 0) {
                                 autoShippingRates = rates;
-                                autoShippingInfo = `Tujuan: ${autoDestLabel}\n` + rates.slice(0, 3).map(r =>
+                                autoShippingInfo = `Tujuan: ${autoDestLabel} (Berat ${beratKg} kg)\n` + rates.slice(0, 3).map(r =>
                                     `${(r.name || r.courier || 'Kurir').toUpperCase()} ${r.service || ''}: Rp ${Number(r.cost || r.price || 0).toLocaleString('id-ID')} (${r.etd || '1-3'} hari)`
                                 ).join('\n');
                                 console.log(`📦 Ongkir siap untuk invoice: ${autoDestLabel}`);
@@ -676,31 +714,9 @@ async function startWhatsAppBot(userId, onStatus) {
                     console.warn("⚠️ Auto-shipping gagal:", shippingErr.message);
                 }
 
-                const allMessages = history.map(h => h.message || '').join(' ').toLowerCase();
-                const hasProductInHistory = allMessages.includes('kaos') || allMessages.includes('produk') || allMessages.includes('order') || allMessages.includes('pesan');
-                const hasAddressInMsg = /kec(?:amatan)?|jalan|jl\.|alamat/i.test(textMessage);
-                const hasNameInMsg = /nama\s+\w+/i.test(textMessage);
-
                 if (hasAddressInMsg && hasNameInMsg && hasProductInHistory && autoShippingRates) {
                     const namaMatch = textMessage.match(/nama\s+([a-zA-Z\s]+?)(?:\s+alamat|\s+jl|\s+kec|$)/i);
                     const namaPenerima = namaMatch ? namaMatch[1].trim() : customerName;
-
-                    let produkOrdered = "Produk";
-                    let hargaProduk = 0;
-                    if (products && products.length > 0) {
-                        const mentionedProduct = products.find(p => allMessages.includes((p.name || p.title || '').toLowerCase()));
-                        if (mentionedProduct) {
-                            produkOrdered = mentionedProduct.name || mentionedProduct.title;
-                            hargaProduk = Number(mentionedProduct.price || 0);
-                        } else {
-                            produkOrdered = products[0].name || products[0].title;
-                            hargaProduk = Number(products[0].price || 0);
-                        }
-                    }
-
-                    const qtyMatch = allMessages.match(/(\d+)\s*pcs/i);
-                    const qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
-                    const totalBarang = hargaProduk * qty;
 
                     function singkatKurir(name, service) {
                         const n = (name || '').toLowerCase();
@@ -794,6 +810,38 @@ async function startWhatsAppBot(userId, onStatus) {
                 aiReply = aiReply.replace(/\[FORWARD_TO_ADMIN\]/gi, '').trim();
             }
 
+            // Cek apakah ada invoice yang harus disimpan
+            let isInvoiceFinal = false;
+            let finalInvoiceText = "";
+            const saveInvoiceMatch = aiReply.match(/\[SAVE_INVOICE:(\d+)\]/i);
+            if (saveInvoiceMatch) {
+                isInvoiceFinal = true;
+                const totalAmount = parseInt(saveInvoiceMatch[1]);
+                aiReply = aiReply.replace(/\[SAVE_INVOICE:\d+\]/gi, '').trim();
+                finalInvoiceText = aiReply;
+                
+                // Cari nama pelanggan dari aiReply jika ada (misal dari "Penerima: Budi")
+                const namaMatch = aiReply.match(/Penerima:\s*([^\n]+)/i);
+                const namaPenerima = namaMatch ? namaMatch[1].trim() : customerName;
+                
+                const invoiceIdStr = 'INV-' + Date.now();
+                supabase.from('invoices').insert([{
+                    user_id: userId,
+                    customer_phone: customerPhone,
+                    customer_name: namaPenerima,
+                    total_amount: totalAmount,
+                    payment_method: 'Transfer',
+                    status: 'PENDING',
+                    invoice_id: invoiceIdStr
+                }]).then(({error}) => {
+                    if (error) console.warn('⚠️ Gagal simpan invoice dari AI tag:', error.message);
+                    else console.log(`✅ Invoice dari AI Tag tersimpan! Total: ${totalAmount}`);
+                });
+            } else if (intent === 'SELECT_COURIER') {
+                isInvoiceFinal = true;
+                finalInvoiceText = aiReply;
+            }
+
             // Kirim balasan ke WhatsApp pelanggan
             await sock.sendMessage(senderJid, { text: aiReply });
             console.log(`✅ Balas ke ${customerName}: ${aiReply.substring(0, 100)}`);
@@ -815,6 +863,26 @@ async function startWhatsAppBot(userId, onStatus) {
                         console.log(`✅ Forwarded to admin ${formattedAdmin}`);
                     } catch (err) {
                         console.error(`Gagal forward ke admin ${formattedAdmin}:`, err.message);
+                    }
+                }
+            }
+
+            // Logika forward Invoice ke Admin (Nomor Khusus)
+            if (isInvoiceFinal && kb && kb.special_numbers) {
+                const adminNumbers = kb.special_numbers.split(/[\n,]+/).map(n => n.trim()).filter(Boolean);
+                for (const adminNum of adminNumbers) {
+                    let formattedAdmin = adminNum;
+                    if (formattedAdmin.startsWith('0')) formattedAdmin = '62' + formattedAdmin.substring(1);
+                    formattedAdmin = formattedAdmin.replace(/\D/g, '');
+                    const adminJid = formattedAdmin + '@s.whatsapp.net';
+                    
+                    const forwardMsg = `🚨 *INVOICE BARU DARI PELANGGAN* 🚨\n\n👤 Nama: ${customerName}\n📱 No: ${customerPhone}\n\n*Isi Invoice:*\n${finalInvoiceText}`;
+                    
+                    try {
+                        await sock.sendMessage(adminJid, { text: forwardMsg });
+                        console.log(`✅ Invoice forwarded to admin ${formattedAdmin}`);
+                    } catch (err) {
+                        console.error(`Gagal forward invoice ke admin ${formattedAdmin}:`, err.message);
                     }
                 }
             }
@@ -900,6 +968,7 @@ async function startWhatsAppBot(userId, onStatus) {
             if (!userId) return res.status(400).json({ error: 'userId diperlukan' });
 
             if (activeSessions[userId]) {
+                activeSessions[userId].sock.isManuallyStopped = true;
                 activeSessions[userId].sock.ws.close();
                 delete activeSessions[userId];
                 res.json({ message: 'Bot berhasil dimatikan' });

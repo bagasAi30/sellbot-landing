@@ -73,6 +73,10 @@ Jika SUDAH ada data order di history → JANGAN tanya lagi, gunakan data yang su
 Jika pelanggan meminta untuk berbicara dengan admin, CS, atau manusia, WAJIB awali jawabanmu dengan tag [FORWARD_TO_ADMIN].
 Contoh: "[FORWARD_TO_ADMIN] Baik kak, mohon tunggu sebentar ya. Pesan kakak sedang diteruskan ke admin kami 🙏"
 
+=== MENGHITUNG TOTAL PESANAN ===
+- Jika pelanggan menanyakan total harga untuk pemesanan barang (misal: "10 pcs tiap produk total berapa?"), HITUNG TOTALNYA dengan benar (harga satuan x jumlah pesanan).
+- Sebutkan rincian perhitungannya secara singkat lalu berikan total akhirnya dengan format Rupiah yang benar.
+
 === CARA MEMBUAT INVOICE ===
 Jika sudah ada semua info: produk, jumlah, nama penerima, dan alamat → buat invoice seperti ini:
 
@@ -92,6 +96,10 @@ Pembayaran via transfer ke:
 ━━━━━━━━━━━━━━━━━
 Mohon kirim bukti transfer ya kak 🙏
 
+Jika kamu mengeluarkan format invoice di atas, WAJIB tambahkan tag rahasia ini di baris paling bawah (sendiri):
+[SAVE_INVOICE:total_angka_saja]
+(contoh: [SAVE_INVOICE:250000])
+
 ${shippingInfo ? `=== INFO ONGKIR TERSEDIA ===\n${shippingInfo}\nGunakan info ongkir ini saat membuat invoice.` : ''}
 
 === EKSPEDISI YANG TERSEDIA ===
@@ -107,6 +115,7 @@ Hanya 2 pilihan ekspedisi: *JNE REG* dan *J&T EXPRESS*. JANGAN sebutkan ekspedis
 Jika kamu sudah mengirim invoice dengan pilihan ongkir dan pelanggan membalas dengan memilih kurir (contoh: "JNE REG", "J&T", "jne aja", "jnt", dsb):
 - JANGAN tanya-tanya lagi, JANGAN minta konfirmasi ulang
 - LANGSUNG kirim INVOICE FINAL lengkap dengan total akhir dan info rekening
+- Jangan lupa tambahkan tag [SAVE_INVOICE:total_angka] di akhir.
 - Tone harus antusias seperti transaksi sudah pasti terjadi 🎉
 
 === CRITICAL OVERRIDES (ATURAN MUTLAK) ===
@@ -114,7 +123,7 @@ Jika kamu sudah mengirim invoice dengan pilihan ongkir dan pelanggan membalas de
 2. JANGAN MEMINTA FORMAT PESANAN / DATA ALAMAT JIKA PELANGGAN HANYA TANYA PRODUK ATAU UKURAN! Cukup jawab pertanyaannya.
 
 Jawab natural seperti manusia. Jika ada [KONTEKS SISTEM] dalam pesan, patuhi instruksinya.
-PENTING: JANGAN PERNAH MENGGUNAKAN TAG <think>! LANGSUNG BERIKAN JAWABAN FINALMU!`;
+PENTING: JANGAN PERNAH MENGGUNAKAN TAG <think>! Jawab langsung. Pastikan tidak ada teks yang terpotong di akhir.`;
 
 
         // 4. Request ke Groq
@@ -133,14 +142,25 @@ PENTING: JANGAN PERNAH MENGGUNAKAN TAG <think>! LANGSUNG BERIKAN JAWABAN FINALMU
 
         try {
             const response = await groq.chat.completions.create({
-                model: "openai/gpt-oss-120b",
+                model: "llama-3.3-70b-versatile",
                 temperature: 0.1,
                 max_tokens: 1000,
                 messages: messages
             });
             content = response.choices[0]?.message?.content || "";
         } catch (firstErr) {
-            console.warn("⚠️ Request groq gagal:", firstErr.message);
+            console.error("⚠️ Request groq gagal:", firstErr.message);
+            if (genAI) {
+                console.log("🔄 Fallback menggunakan Gemini...");
+                try {
+                    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                    const prompt = messages.map(m => `${m.role === 'user' ? 'User' : m.role === 'system' ? 'System' : 'Assistant'}: ${m.content}`).join('\n\n') + '\n\nAssistant:';
+                    const result = await model.generateContent(prompt);
+                    content = (await result.response).text().trim();
+                } catch (geminiErr) {
+                    console.error("⚠️ Request Gemini fallback gagal:", geminiErr.message);
+                }
+            }
         }
 
         // Hapus blok <think>...</think>
@@ -169,7 +189,7 @@ async function processImageWithGemini(base64Image, mimeType, caption = "", store
             return "Maaf kak, fitur baca gambar belum diaktifkan (API Key kurang). Bisa diketik aja? 🙏";
         }
 
-        const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash-lite" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
         // Format history
         const formattedHistory = history
@@ -216,13 +236,6 @@ Jawabanmu:`;
 
 async function extractIntentWithGemini(userMessage, history = []) {
     try {
-        if (!genAI) {
-            console.warn("GEMINI_API_KEY belum dikonfigurasi di .env");
-            return { intent: "GENERAL", location: null };
-        }
-
-        const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash-lite" });
-
         const formattedHistory = history
             .slice(-10) // Ambil 10 pesan terakhir saja agar ringkas
             .filter(item => item.message && item.message.trim())
@@ -256,13 +269,35 @@ Format balasanmu WAJIB berupa JSON valid persis seperti ini (tanpa markdown tamb
 }
 `;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        let text = response.text().trim();
-        
+        let text = "";
+
+        if (groq) {
+            try {
+                const response = await groq.chat.completions.create({
+                    model: "llama-3.3-70b-versatile",
+                    temperature: 0.1,
+                    messages: [{ role: "user", content: prompt }]
+                });
+                text = response.choices[0]?.message?.content || "";
+            } catch (err) {
+                console.warn("⚠️ Intent extraction Groq gagal:", err.message);
+            }
+        }
+
+        if (!text && genAI) {
+            try {
+                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const result = await model.generateContent(prompt);
+                text = (await result.response).text().trim();
+            } catch (err) {
+                console.warn("⚠️ Intent extraction Gemini gagal:", err.message);
+            }
+        }
+
+        if (!text) return { intent: "GENERAL", location: null };
+
         // Bersihkan markdown blok jika ada
         text = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
-        
         const jsonResult = JSON.parse(text);
         return jsonResult;
 
