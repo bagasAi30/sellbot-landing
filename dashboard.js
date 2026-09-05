@@ -890,40 +890,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
 
-            // 3. Invoices Table Data
-            const { data: invoices, error: invError } = await window.supabaseClient
-                .from('invoices')
-                .select('*')
-                .eq('user_id', user_id)
-                .order('created_at', { ascending: false })
-                .limit(20);
-
-            const invoiceTbody = document.getElementById('invoicesTableBody');
-            if (invoiceTbody) {
-                if (invError || !invoices || invoices.length === 0) {
-                    invoiceTbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 24px;">Belum ada riwayat invoice / order.</td></tr>';
-                } else {
-                    invoicesData = invoices;
-                    invoiceTbody.innerHTML = '';
-                    invoices.forEach(inv => {
-                        const tr = document.createElement('tr');
-                        const statusColor = inv.status === 'PAID' ? 'success' : (inv.status === 'PENDING' ? 'warning' : 'danger');
-                        const invoiceIdStr = inv.invoice_id || inv.id;
-                        tr.innerHTML = `
-                            <td><strong>${invoiceIdStr}</strong></td>
-                            <td>${inv.customer_name || inv.customer_phone || '-'}</td>
-                            <td>Rp ${(inv.total_amount || 0).toLocaleString('id-ID')}</td>
-                            <td><span class="status-badge" style="background:rgba(255,255,255,0.08); font-size:12px;">${inv.payment_method || 'Transfer'}</span></td>
-                            <td><span class="status-badge ${statusColor}" style="font-size:12px;">${inv.status || 'PENDING'}</span></td>
-                            <td>${new Date(inv.created_at).toLocaleDateString('id-ID')}</td>
-                            <td>
-                                <button class="btn btn-outline btn-small" onclick="openResiModal('${invoiceIdStr}', '${inv.customer_phone}')">Input Resi</button>
-                            </td>
-                        `;
-                        invoiceTbody.appendChild(tr);
-                    });
-                }
-            }
 
             // 4. Products Table
             const { data: products, error: prodError } = await window.supabaseClient

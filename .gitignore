@@ -1,2 +1,7 @@
-"backend/.env" 
-"backend/.env" 
+.env
+*.env
+.env.*
+backend/.env
+sellbot-landing/backend-bot/.env
+node_modules/
+auth_info_*

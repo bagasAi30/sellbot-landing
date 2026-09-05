@@ -565,6 +565,15 @@ async function startWhatsAppBot(userId, onStatus) {
                     history,
                     ""
                 );
+
+                // Fallback jika AI offline / kuota habis
+                if (!aiReply || aiReply.includes('Admin') || aiReply.includes('diulang')) {
+                    if (hasCODPolicy) {
+                        aiReply = "Bisa banget kak! Untuk pembayaran COD (Bayar di Tempat) ada biaya layanan COD sebesar 3% ya kak. Mau pesan produk yang mana kak? 😊";
+                    } else {
+                        aiReply = "Maaf kak, saat ini toko kami belum menyediakan pembayaran COD (Bayar di Tempat). Pembayaran kami melayani Transfer Bank dan QRIS ya kak 🙏";
+                    }
+                }
                 console.log(`✅ Jawaban COD untuk ${customerName}`);
 
             } else if (intent === 'CANCEL') {

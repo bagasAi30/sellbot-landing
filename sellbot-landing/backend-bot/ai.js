@@ -142,23 +142,35 @@ PENTING: JANGAN PERNAH MENGGUNAKAN TAG <think>! Jawab langsung. Pastikan tidak a
 
         try {
             const response = await groq.chat.completions.create({
-                model: "llama-3.3-70b-versatile",
+                model: "openai/gpt-oss-120b",
                 temperature: 0.1,
                 max_tokens: 1000,
                 messages: messages
             });
             content = response.choices[0]?.message?.content || "";
         } catch (firstErr) {
-            console.error("⚠️ Request groq gagal:", firstErr.message);
-            if (genAI) {
-                console.log("🔄 Fallback menggunakan Gemini...");
-                try {
-                    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-                    const prompt = messages.map(m => `${m.role === 'user' ? 'User' : m.role === 'system' ? 'System' : 'Assistant'}: ${m.content}`).join('\n\n') + '\n\nAssistant:';
-                    const result = await model.generateContent(prompt);
-                    content = (await result.response).text().trim();
-                } catch (geminiErr) {
-                    console.error("⚠️ Request Gemini fallback gagal:", geminiErr.message);
+            console.error("⚠️ Request groq (openai/gpt-oss-120b) gagal:", firstErr.message);
+            try {
+                console.log("🔄 Mencoba fallback groq (openai/gpt-oss-20b)...");
+                const response = await groq.chat.completions.create({
+                    model: "openai/gpt-oss-20b",
+                    temperature: 0.1,
+                    max_tokens: 1000,
+                    messages: messages
+                });
+                content = response.choices[0]?.message?.content || "";
+            } catch (secondErr) {
+                console.error("⚠️ Request groq fallback gagal:", secondErr.message);
+                if (genAI) {
+                    console.log("🔄 Fallback menggunakan Gemini...");
+                    try {
+                        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                        const prompt = messages.map(m => `${m.role === 'user' ? 'User' : m.role === 'system' ? 'System' : 'Assistant'}: ${m.content}`).join('\n\n') + '\n\nAssistant:';
+                        const result = await model.generateContent(prompt);
+                        content = (await result.response).text().trim();
+                    } catch (geminiErr) {
+                        console.error("⚠️ Request Gemini fallback gagal:", geminiErr.message);
+                    }
                 }
             }
         }
@@ -172,13 +184,14 @@ PENTING: JANGAN PERNAH MENGGUNAKAN TAG <think>! Jawab langsung. Pastikan tidak a
         }
 
         if (!finalContent) {
-            return "Maaf kak, bisa diulang pertanyaannya? 🙏";
+            console.warn("⚠️ AI tidak mengembalikan konten (periksa kuota/validitas GROQ_API_KEY atau GEMINI_API_KEY di .env)");
+            return "Halo kak! Terima kasih sudah menghubungi kami. Mohon ditunggu sebentar ya kak, tim admin kami akan segera membantu melayani pertanyaan kakak 🙏";
         }
 
         return finalContent;
     } catch (error) {
         console.error("Error pada generateAIResponse (Groq):", error.message);
-        return "Maaf kak, sistem kami sedang sibuk. Bisa coba lagi sebentar? 🙏";
+        return "Halo kak! Terima kasih sudah menghubungi kami. Mohon ditunggu sebentar ya kak, tim admin kami akan segera membantu melayani pertanyaan kakak 🙏";
     }
 }
 
@@ -234,7 +247,62 @@ Jawabanmu:`;
     }
 }
 
+function extractIntentRuleBased(userMessage, history = []) {
+    const text = (userMessage || '').trim();
+    const lower = text.toLowerCase();
+    
+    // 1. Cek intent CANCEL
+    if (/^(batal|cancel|nggak\s+jadi|gak\s+jadi|ga\s+jadi|tidak\s+jadi)\b/i.test(lower)) {
+        return { intent: "CANCEL", location: null };
+    }
+
+    // 2. Cek intent SELECT_COURIER
+    const lastBotMsg = history.filter(h => h.sender === 'ai').slice(-1)[0]?.message || '';
+    const botOfferedCourier = /mau\s+pilih\s+\*?(?:jne|j&t|jnt)/i.test(lastBotMsg) || /ekspedisi/i.test(lastBotMsg) || /pilihan\s+ongkir/i.test(lastBotMsg);
+    if (botOfferedCourier || /^(pilih\s+)?(jne(\s*reg)?|j&t(\s*express)?|jnt)\b/i.test(lower)) {
+        if (/jne|j&t|jnt/i.test(lower)) {
+            return { intent: "SELECT_COURIER", location: null };
+        }
+    }
+
+    // 3. Cek intent ASK_COD
+    if (/(?:bisa\s+cod|bayar\s+di\s*tempat|ada\s+cod|bisa\s+bayar\s+di\s*tempat|sistem\s+cod|apakah\s+bisa\s+cod)/i.test(lower)) {
+        return { intent: "ASK_COD", location: null };
+    }
+
+    // 4. Cek intent CHECK_SHIPPING
+    const isShippingQuery = /(?:ongkir|ongkos\s*kirim|tarif|biaya\s*(?:ongkir|kirim)|kirim\s+ke|ongkos\s+ke)/i.test(lower);
+    if (isShippingQuery) {
+        const match = lower.match(/(?:ke|tujuan|daerah|wilayah)\s+([a-zA-Z0-9\s]+?)(?:\s+berapa|\s*[\?,\.\!]|$)/i)
+                   || lower.match(/(?:ongkir|ongkos\s*kirim|biaya\s*kirim)\s+(?:ke\s+)?([a-zA-Z0-9\s]+?)(?:\s+berapa|\s*[\?,\.\!]|$)/i);
+        
+        let loc = match ? match[1].replace(/^(ke|tujuan|daerah)\s+/i, '').trim() : null;
+        if (loc && loc.length >= 3) {
+            loc = loc.replace(/\s*(berapa|kak|ya|mas|min|dong|kira-kira|kah)$/i, '').trim();
+            return { intent: "CHECK_SHIPPING", location: loc };
+        }
+        return { intent: "CHECK_SHIPPING", location: null };
+    }
+
+    // Jika bot sebelumnya bertanya "Mau cek ongkir ke mana kak?" dan user menjawab nama kota/kecamatan
+    if (lastBotMsg.includes('Mau cek ongkir ke mana') || lastBotMsg.includes('Sebutkan nama kota')) {
+        const cleaned = text.replace(/^[,\.\!\?\s]+|[,\.\!\?\s]+$/g, '').trim();
+        if (cleaned.length >= 3 && !/^(halo|hi|p|pagi|siang|sore|malam)$/i.test(cleaned)) {
+            return { intent: "CHECK_SHIPPING", location: cleaned };
+        }
+    }
+
+    return { intent: "GENERAL", location: null };
+}
+
 async function extractIntentWithGemini(userMessage, history = []) {
+    // Evaluasi awal dengan Rule-based (0ms latency, anti-fail saat API AI offline/limit)
+    const ruleBased = extractIntentRuleBased(userMessage, history);
+    if (ruleBased && ruleBased.intent !== "GENERAL") {
+        console.log(`⚡ Intent terdeteksi via Smart Rule Engine: ${ruleBased.intent}, Location: ${ruleBased.location}`);
+        return ruleBased;
+    }
+
     try {
         const formattedHistory = history
             .slice(-10) // Ambil 10 pesan terakhir saja agar ringkas
@@ -274,13 +342,23 @@ Format balasanmu WAJIB berupa JSON valid persis seperti ini (tanpa markdown tamb
         if (groq) {
             try {
                 const response = await groq.chat.completions.create({
-                    model: "llama-3.3-70b-versatile",
+                    model: "openai/gpt-oss-120b",
                     temperature: 0.1,
                     messages: [{ role: "user", content: prompt }]
                 });
                 text = response.choices[0]?.message?.content || "";
             } catch (err) {
-                console.warn("⚠️ Intent extraction Groq gagal:", err.message);
+                console.warn("⚠️ Intent extraction Groq (openai/gpt-oss-120b) gagal:", err.message);
+                try {
+                    const response = await groq.chat.completions.create({
+                        model: "openai/gpt-oss-20b",
+                        temperature: 0.1,
+                        messages: [{ role: "user", content: prompt }]
+                    });
+                    text = response.choices[0]?.message?.content || "";
+                } catch (fallbackErr) {
+                    console.warn("⚠️ Intent extraction Groq fallback gagal:", fallbackErr.message);
+                }
             }
         }
 
@@ -294,7 +372,7 @@ Format balasanmu WAJIB berupa JSON valid persis seperti ini (tanpa markdown tamb
             }
         }
 
-        if (!text) return { intent: "GENERAL", location: null };
+        if (!text) return ruleBased || { intent: "GENERAL", location: null };
 
         // Bersihkan markdown blok jika ada
         text = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
@@ -303,7 +381,7 @@ Format balasanmu WAJIB berupa JSON valid persis seperti ini (tanpa markdown tamb
 
     } catch (error) {
         console.error("Error pada extractIntentWithGemini:", error.message);
-        return { intent: "GENERAL", location: null };
+        return ruleBased || { intent: "GENERAL", location: null };
     }
 }
 module.exports = { generateAIResponse, processImageWithGemini, extractIntentWithGemini };
