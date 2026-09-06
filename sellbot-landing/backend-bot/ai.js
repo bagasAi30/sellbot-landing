@@ -247,6 +247,39 @@ Jawabanmu:`;
     }
 }
 
+// Daftar kata-kata umum / stop words yang TIDAK BOLEH dianggap sebagai nama lokasi
+const LOCATION_STOP_WORDS = new Set([
+    'nya', 'dong', 'sih', 'tuh', 'ya', 'kak', 'kakak', 'mas', 'bang', 'min', 'admin', 'gan', 'bro', 'sis',
+    'perkilo', 'per kilo', 'per-kilo', 'kilo', 'kg', 'gram', 'gr', 'ons', 'berapa', 'kah', 'apa', 'apakah',
+    'saja', 'aja', 'itu', 'ini', 'situ', 'sini', 'sana', 'kesana', 'kesitu', 'kesini',
+    'paket', 'barang', 'kirim', 'ongkir', 'tarif', 'biaya', 'ongkos', 'ekspedisi', 'kurir',
+    'jne', 'jnt', 'j&t', 'sicepat', 'anteraja', 'pos', 'tiki', 'wahana', 'lion', 'ninja',
+    'ada', 'bisa', 'mau', 'tolong', 'minta', 'cek', 'cekin', 'cekan', 'mohon', 'pilihan',
+    'reg', 'oke', 'yes', 'express', 'standard', 'hemat', 'cargo', 'kargo'
+]);
+
+function cleanAndValidateLocation(rawLoc) {
+    if (!rawLoc || typeof rawLoc !== 'string') return null;
+    let loc = rawLoc.trim();
+    // Hapus awalan umum
+    loc = loc.replace(/^(?:ke|tujuan|daerah|wilayah|di|kota|kecamatan|kabupaten)\s+/i, '').trim();
+    // Hapus akhiran partikel & kata tanya (wajib didahului spasi agar tidak memotong nama kota seperti Surabaya)
+    while (/\s+(?:berapa|kak|kakak|ya|mas|bang|min|admin|gan|dong|kira-kira|kah|sih|tuh|tahu|tolong|mohon|saja|aja)$/i.test(loc)) {
+        loc = loc.replace(/\s+(?:berapa|kak|kakak|ya|mas|bang|min|admin|gan|dong|kira-kira|kah|sih|tuh|tahu|tolong|mohon|saja|aja)$/i, '').trim();
+    }
+    loc = loc.replace(/[,\.\?!]+$/g, '').trim();
+
+    const lower = loc.toLowerCase().trim();
+    if (LOCATION_STOP_WORDS.has(lower)) return null;
+
+    // Pastikan masih tersisa kata bermakna (bukan hanya kumpulan stop words)
+    const words = lower.split(/\s+/).filter(w => !LOCATION_STOP_WORDS.has(w) && w.length >= 2);
+    if (words.length === 0) return null;
+
+    if (loc.length < 3) return null;
+    return loc;
+}
+
 function extractIntentRuleBased(userMessage, history = []) {
     const text = (userMessage || '').trim();
     const lower = text.toLowerCase();
@@ -258,10 +291,16 @@ function extractIntentRuleBased(userMessage, history = []) {
 
     // 2. Cek intent SELECT_COURIER
     const lastBotMsg = history.filter(h => h.sender === 'ai').slice(-1)[0]?.message || '';
-    const botOfferedCourier = /mau\s+pilih\s+\*?(?:jne|j&t|jnt)/i.test(lastBotMsg) || /ekspedisi/i.test(lastBotMsg) || /pilihan\s+ongkir/i.test(lastBotMsg);
-    if (botOfferedCourier || /^(pilih\s+)?(jne(\s*reg)?|j&t(\s*express)?|jnt)\b/i.test(lower)) {
-        if (/jne|j&t|jnt/i.test(lower)) {
-            return { intent: "SELECT_COURIER", location: null };
+    const botOfferedCourier = /(?:mau\s+)?pilih\s+\*?(?:jne|j&t|jnt)/i.test(lastBotMsg) || /ekspedisi/i.test(lastBotMsg) || /pilihan\s+ongkir/i.test(lastBotMsg) || /kurir/i.test(lastBotMsg);
+    if (botOfferedCourier || /(?:pilih|pakai|kirim\s+lewat|lewat|gunakan)?\s*(?:jne|j&t|jnt)/i.test(lower)) {
+        if (/\b(?:jne|j&t|jnt)\b/i.test(lower)) {
+            // Jika pesan murni pemilihan kurir singkat (contoh: "jne", "pilih jne reg", "jnt aja")
+            const isPureCourierChoice = /^(?:pilih\s+|mau\s+|pakai\s+|kirim\s+lewat\s+|lewat\s+|gunakan\s+)?(?:jne(?:\s*reg)?|j&t(?:\s*express)?|jnt)(?:\s*(?:aja|ya|kak|min|gan|dong|saja|deh|oke))?$/i.test(text.trim());
+            if (isPureCourierChoice) {
+                return { intent: "SELECT_COURIER", location: null };
+            }
+            // Jika pesan komposit (mengandung nama, alamat, atau lebih dari sekadar pilihan kurir),
+            // biarkan extractIntentWithGemini mengekstrak lokasi & intent secara utuh
         }
     }
 
@@ -271,24 +310,24 @@ function extractIntentRuleBased(userMessage, history = []) {
     }
 
     // 4. Cek intent CHECK_SHIPPING
-    const isShippingQuery = /(?:ongkir|ongkos\s*kirim|tarif|biaya\s*(?:ongkir|kirim)|kirim\s+ke|ongkos\s+ke)/i.test(lower);
+    const isShippingQuery = /(?:ongkir|ongkos\s*kirim|tarif|biaya\s*(?:ongkir|kirim)|kirim\s+ke|ongkos\s+ke|per[\s\-]?kilo|per[\s\-]?kg)/i.test(lower);
     if (isShippingQuery) {
-        const match = lower.match(/(?:ke|tujuan|daerah|wilayah)\s+([a-zA-Z0-9\s]+?)(?:\s+berapa|\s*[\?,\.\!]|$)/i)
-                   || lower.match(/(?:ongkir|ongkos\s*kirim|biaya\s*kirim)\s+(?:ke\s+)?([a-zA-Z0-9\s]+?)(?:\s+berapa|\s*[\?,\.\!]|$)/i);
+        let loc = null;
+        const matchKe = lower.match(/(?:ke|tujuan|daerah|wilayah)\s+([a-zA-Z0-9\s]+?)(?:\s+berapa|\s*[\?,\.\!]|$)/i);
+        const matchOngkir = lower.match(/(?:ongkir|ongkos\s*kirim|biaya\s*kirim)\s+ke\s+([a-zA-Z0-9\s]+?)(?:\s+berapa|\s*[\?,\.\!]|$)/i);
         
-        let loc = match ? match[1].replace(/^(ke|tujuan|daerah)\s+/i, '').trim() : null;
-        if (loc && loc.length >= 3) {
-            loc = loc.replace(/\s*(berapa|kak|ya|mas|min|dong|kira-kira|kah)$/i, '').trim();
-            return { intent: "CHECK_SHIPPING", location: loc };
-        }
-        return { intent: "CHECK_SHIPPING", location: null };
+        const rawCandidate = matchKe ? matchKe[1] : (matchOngkir ? matchOngkir[1] : null);
+        loc = cleanAndValidateLocation(rawCandidate);
+
+        return { intent: "CHECK_SHIPPING", location: loc };
     }
 
     // Jika bot sebelumnya bertanya "Mau cek ongkir ke mana kak?" dan user menjawab nama kota/kecamatan
     if (lastBotMsg.includes('Mau cek ongkir ke mana') || lastBotMsg.includes('Sebutkan nama kota')) {
         const cleaned = text.replace(/^[,\.\!\?\s]+|[,\.\!\?\s]+$/g, '').trim();
-        if (cleaned.length >= 3 && !/^(halo|hi|p|pagi|siang|sore|malam)$/i.test(cleaned)) {
-            return { intent: "CHECK_SHIPPING", location: cleaned };
+        const validLoc = cleanAndValidateLocation(cleaned);
+        if (validLoc && !/^(halo|hi|p|pagi|siang|sore|malam)$/i.test(validLoc)) {
+            return { intent: "CHECK_SHIPPING", location: validLoc };
         }
     }
 
@@ -320,15 +359,16 @@ Pesan Terbaru Pengguna:
 "${userMessage}"
 
 PILIHAN INTENT:
-1. "CHECK_SHIPPING": Jika pengguna MINTA CEK ONGKIR, BERTANYA ONGKIR, atau MEMBERIKAN ALAMAT/KOTA/KECAMATAN setelah ditanya ongkir/alamat.
+1. "CHECK_SHIPPING": Jika pengguna MINTA CEK ONGKIR, BERTANYA ONGKIR, BERTANYA ONGKIR PER KILO ("perkilo", "per kg"), atau MEMBERIKAN ALAMAT/KOTA/KECAMATAN setelah ditanya ongkir/alamat.
 2. "ASK_COD": Jika pengguna bertanya apakah bisa COD, bayar di tempat, atau sistem pembayarannya bagaimana.
 3. "CANCEL": Jika pengguna membatalkan pesanan (contoh: "batal", "cancel", "nggak jadi").
-4. "SELECT_COURIER": Jika pengguna memilih kurir (contoh: "JNE", "J&T") SETELAH diberi pilihan ongkir.
+4. "SELECT_COURIER": Jika pengguna memilih kurir (contoh: "JNE", "J&T") baik sendiri maupun bersamaan dengan nama/alamat penerima.
 5. "GENERAL": Selain dari yang di atas (contoh: ngobrol biasa, tanya produk, pesan barang HANYA menyebutkan nama produk tanpa alamat pengiriman).
 
 PENTING UNTUK LOKASI:
-Kamu WAJIB mengekstrak nama lokasi (kota/kecamatan) dari pesan pengguna jika dia menyebutkan alamat/tujuan pengiriman, untuk INTENT APA PUN (baik CHECK_SHIPPING maupun GENERAL).
-JANGAN pernah mengekstrak nama produk (seperti "Kaos Premium", "Sepatu", dll) sebagai nama lokasi!
+Kamu WAJIB mengekstrak nama lokasi (kota/kecamatan) dari pesan pengguna jika dia menyebutkan alamat/tujuan pengiriman, untuk INTENT APA PUN (termasuk SELECT_COURIER, CHECK_SHIPPING, maupun GENERAL).
+JANGAN PERNAH mengekstrak nama produk (seperti "Kaos Premium", "Sepatu", dll) sebagai nama lokasi!
+JANGAN PERNAH mengekstrak kata-kata seperti "nya", "perkilo", "per kilo", "berapa", "kak", "ke", "ke mana", "ongkir" sebagai nama lokasi! Jika pengguna tidak menyebutkan nama daerah/kota/kecamatan yang jelas, kembalikan "location": null.
 
 Format balasanmu WAJIB berupa JSON valid persis seperti ini (tanpa markdown tambahan):
 {
@@ -377,6 +417,7 @@ Format balasanmu WAJIB berupa JSON valid persis seperti ini (tanpa markdown tamb
         // Bersihkan markdown blok jika ada
         text = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
         const jsonResult = JSON.parse(text);
+        jsonResult.location = cleanAndValidateLocation(jsonResult.location);
         return jsonResult;
 
     } catch (error) {
@@ -384,4 +425,95 @@ Format balasanmu WAJIB berupa JSON valid persis seperti ini (tanpa markdown tamb
         return ruleBased || { intent: "GENERAL", location: null };
     }
 }
-module.exports = { generateAIResponse, processImageWithGemini, extractIntentWithGemini };
+
+async function extractOrderDetails(userMessage, history = [], storeRules = "", products = []) {
+    try {
+        const recentHistory = history
+            .slice(-8)
+            .filter(item => item.message && item.message.trim())
+            .map(item => `[${item.sender.toUpperCase()}]: ${item.message}`)
+            .join('\n');
+
+        const productCatalogSnippet = products && products.length > 0
+            ? products.map(p => `- ${p.name || p.title}: Rp ${Number(p.price || 0).toLocaleString('id-ID')}`).join('\n')
+            : '';
+
+        const prompt = `Kamu adalah sistem AI Order Extractor untuk toko online WhatsApp.
+Tugasmu: Mengekstrak data pesanan yang SEDANG aktif dibahas dari percakapan WhatsApp terkini.
+PERATURAN PENTING:
+1. Fokus HANYA pada produk yang SEDANG dibicarakan atau dipesan saat ini di chat terkini (misal: "Paket Umbul-Umbul Promo", "Umbul-Umbul", dll).
+2. DILARANG KERAS mengambil nama produk lama (seperti kaos, sepatu, dll) yang pernah ada di riwayat lampau jika percakapan terkini membicarakan produk baru!
+3. Jika di pesan terakhir AI menyebutkan total harga (contoh: "10 paket Umbul-Umbul = Rp 1.100.000"), maka produk = "Paket Umbul-Umbul Promo", qty = 10, unit = "paket", total_harga_barang = 1100000.
+4. Ekstrak nama penerima, alamat lengkap, dan perbaiki typo nama lokasi (kecamatan/kota tujuan pengiriman, misal: "tambakasari surabaya" -> "Tambaksari, Surabaya").
+5. Deteksi kurir pilihan pelanggan jika disebutkan di pesan (misal: "JNE REG" atau "J&T EXPRESS").
+
+Riwayat Chat Terkini:
+${recentHistory}
+
+Pesan Pengguna:
+"${userMessage}"
+
+${productCatalogSnippet ? `Katalog Toko:\n${productCatalogSnippet}\n` : ''}
+${storeRules ? `Aturan/Info Toko:\n${storeRules.substring(0, 600)}\n` : ''}
+
+Format balasanmu WAJIB berupa JSON valid persis seperti ini (tanpa markdown tambahan):
+{
+  "produk": "Nama produk yang sedang dibeli",
+  "qty": 1,
+  "unit": "pcs",
+  "total_harga_barang": 100000,
+  "nama_penerima": "nama pelanggan atau null",
+  "alamat": "alamat yang diberikan pengguna (jika hanya menyebutkan kota/kecamatan, isi dengan kota/kecamatan tersebut)",
+  "lokasi_ongkir": "Kecamatan dan Kota (contoh: Tambaksari, Surabaya) atau null",
+  "kurir": "JNE REG" atau "J&T EXPRESS" atau null
+}`;
+
+        let text = "";
+        if (groq) {
+            try {
+                const response = await groq.chat.completions.create({
+                    model: "openai/gpt-oss-120b",
+                    temperature: 0.1,
+                    messages: [{ role: "user", content: prompt }]
+                });
+                text = response.choices[0]?.message?.content || "";
+            } catch (err) {
+                console.warn("⚠️ extractOrderDetails Groq 120b gagal:", err.message);
+                try {
+                    const response = await groq.chat.completions.create({
+                        model: "openai/gpt-oss-20b",
+                        temperature: 0.1,
+                        messages: [{ role: "user", content: prompt }]
+                    });
+                    text = response.choices[0]?.message?.content || "";
+                } catch (fallbackErr) {
+                    console.warn("⚠️ extractOrderDetails Groq fallback gagal:", fallbackErr.message);
+                }
+            }
+        }
+
+        if (!text && genAI) {
+            try {
+                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const result = await model.generateContent(prompt);
+                text = (await result.response).text().trim();
+            } catch (err) {
+                console.warn("⚠️ extractOrderDetails Gemini gagal:", err.message);
+            }
+        }
+
+        if (!text) return null;
+
+        text = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
+        const jsonResult = JSON.parse(text);
+        if (jsonResult.lokasi_ongkir) {
+            jsonResult.lokasi_ongkir = cleanAndValidateLocation(jsonResult.lokasi_ongkir);
+        }
+        return jsonResult;
+    } catch (error) {
+        console.error("Error pada extractOrderDetails:", error.message);
+        return null;
+    }
+}
+
+module.exports = { generateAIResponse, processImageWithGemini, extractIntentWithGemini, extractIntentRuleBased, extractOrderDetails, cleanAndValidateLocation };

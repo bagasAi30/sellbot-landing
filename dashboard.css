@@ -306,6 +306,7 @@ body.dashboard-body {
 .metrics-grid .metric-card:nth-child(2) { background: linear-gradient(135deg, #FFFFFF, #F5EEFF); border-top: 3px solid #8B5CF6; }
 .metrics-grid .metric-card:nth-child(3) { background: linear-gradient(135deg, #FFFFFF, #ECFEFF); border-top: 3px solid #06B6D4; }
 .metrics-grid .metric-card:nth-child(4) { background: linear-gradient(135deg, #FFFFFF, #DCFCE7); border-top: 3px solid #22C55E; }
+.metrics-grid .metric-card:nth-child(5) { background: linear-gradient(135deg, #FFFFFF, #F5F3FF); border-top: 3px solid #6366F1; }
 
 .metric-card:hover {
     transform: translateY(-2px);
@@ -1274,4 +1275,39 @@ input:checked + .slider:before {
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+}
+
+/* 17. Chat History Layout */
+.chat-customer-item {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background 0.2s ease;
+    display: flex;
+    align-items: center;
+}
+
+.chat-customer-item:hover {
+    background: #F1F5F9;
+}
+
+.chat-customer-item.active {
+    background: #E0E7FF;
+    border-left: 3px solid var(--primary);
+}
+
+.chat-customer-info {
+    flex: 1;
+}
+
+.chat-customer-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.chat-customer-phone {
+    font-size: 12px;
+    color: var(--text-secondary);
 }

@@ -14,9 +14,10 @@ const cors = require('cors');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const { createClient } = require('@supabase/supabase-js');
-const { generateAIResponse, processImageWithGemini, extractIntentWithGemini } = require('./ai');
+const { generateAIResponse, processImageWithGemini, extractIntentWithGemini, extractOrderDetails, cleanAndValidateLocation } = require('./ai');
 const { searchDestination, calculateShipping } = require('./shipping');
 
+const fs = require('fs');
 const path = require('path');
 
 process.on('uncaughtException', (err) => {
@@ -29,8 +30,6 @@ process.on('unhandledRejection', (reason, promise) => {
 const app = express();
 app.use(cors());
 app.use(express.json());
-
-const fs = require('fs');
 
 // Melayani file-file statis Frontend (cek ./public dulu, lalu .. atau ../..)
 let frontendPath = path.join(__dirname, 'public');
@@ -97,6 +96,173 @@ function getFromMemory(userId, customerPhone) {
 }
 
 /**
+ * Mendapatkan atau menginisialisasi sesi per-pelanggan terisolasi
+ */
+function getCustomerSession(userId, customerPhone) {
+    if (!activeSessions[userId]) {
+        activeSessions[userId] = { sock: null, status: 'UNKNOWN', qr: null, customers: {} };
+    }
+    if (!activeSessions[userId].customers) {
+        activeSessions[userId].customers = {};
+    }
+    if (!activeSessions[userId].customers[customerPhone]) {
+        activeSessions[userId].customers[customerPhone] = {
+            pendingOrder: null,
+            lastDestination: null
+        };
+    }
+    return activeSessions[userId].customers[customerPhone];
+}
+
+// In-memory cache untuk mapping WhatsApp LID ke nomor telepon asli
+const lidToPhoneCache = new Map();
+
+/**
+ * Mendapatkan nomor HP asli pelanggan dari pesan Baileys (mengatasi LID WhatsApp)
+ */
+async function resolveCustomerPhoneNumber(msg, sock, userId) {
+    const senderJid = msg.key?.remoteJid || '';
+    
+    // 1. Jika sudah nomor WhatsApp biasa (@s.whatsapp.net)
+    if (senderJid.endsWith('@s.whatsapp.net')) {
+        return senderJid.split('@')[0].split(':')[0].replace(/\D/g, '');
+    }
+
+    const lidUser = senderJid.split('@')[0].split(':')[0];
+
+    // Cek cache memori
+    if (lidToPhoneCache.has(lidUser)) {
+        return lidToPhoneCache.get(lidUser);
+    }
+
+    // 2. Cek remoteJidAlt atau participantAlt dari Baileys message key
+    const altJid = msg.key?.remoteJidAlt || msg.key?.participantAlt;
+    if (altJid && altJid.endsWith('@s.whatsapp.net')) {
+        const num = altJid.split('@')[0].split(':')[0].replace(/\D/g, '');
+        if (num) {
+            lidToPhoneCache.set(lidUser, num);
+            return num;
+        }
+    }
+
+    // 3. Cek participant jika ada
+    const participant = msg.key?.participant;
+    if (participant && participant.endsWith('@s.whatsapp.net')) {
+        const num = participant.split('@')[0].split(':')[0].replace(/\D/g, '');
+        if (num) {
+            lidToPhoneCache.set(lidUser, num);
+            return num;
+        }
+    }
+
+    // 4. Jika senderJid adalah LID (@lid), coba query signalRepository Baileys
+    if (senderJid.endsWith('@lid') && sock?.signalRepository?.lidMapping?.getPNForLID) {
+        try {
+            const pn = await sock.signalRepository.lidMapping.getPNForLID(senderJid);
+            if (pn) {
+                const num = pn.split('@')[0].split(':')[0].replace(/\D/g, '');
+                if (num) {
+                    console.log(`📱 Berhasil resolve LID ${senderJid} -> PN ${num} (via signalRepository)`);
+                    lidToPhoneCache.set(lidUser, num);
+                    return num;
+                }
+            }
+        } catch (e) {
+            console.warn('⚠️ Gagal getPNForLID:', e.message);
+        }
+    }
+
+    // 5. Cek file reverse mapping Baileys di semua folder auth yang tersedia
+    if (senderJid.endsWith('@lid') || (lidUser && lidUser.length >= 14)) {
+        const potentialRoots = [
+            __dirname,
+            process.cwd(),
+            path.join(process.cwd(), 'sellbot-landing', 'backend-bot'),
+            path.join(__dirname, '..')
+        ];
+        for (const root of potentialRoots) {
+            try {
+                if (fs.existsSync(root)) {
+                    const entries = fs.readdirSync(root, { withFileTypes: true });
+                    for (const entry of entries) {
+                        if (entry.isDirectory() && entry.name.startsWith('auth_info')) {
+                            const mappingFile = path.join(root, entry.name, `lid-mapping-${lidUser}_reverse.json`);
+                            if (fs.existsSync(mappingFile)) {
+                                try {
+                                    const raw = fs.readFileSync(mappingFile, 'utf8');
+                                    const data = JSON.parse(raw);
+                                    if (typeof data === 'string' && data.trim()) {
+                                        const cleanPn = data.replace(/\D/g, '');
+                                        if (cleanPn && cleanPn.length >= 9) {
+                                            console.log(`📱 Berhasil resolve LID ${lidUser} -> PN ${cleanPn} (via ${entry.name})`);
+                                            lidToPhoneCache.set(lidUser, cleanPn);
+                                            return cleanPn;
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.warn('⚠️ Gagal baca file lid-mapping:', e.message);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                // Ignore read errors
+            }
+        }
+    }
+
+    // 6. Cek apakah ada nomor telepon yang diketik di pesan saat ini
+    const rawText = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || "";
+    const phoneInText = rawText.match(/(?:wa|no|nomor|hp)?\s*[:\s]?\s*(08\d{8,12}|628\d{8,12}|\+628\d{8,12})/i);
+    if (phoneInText) {
+        let clean = phoneInText[1].replace(/\D/g, '');
+        if (clean.startsWith('0')) clean = '62' + clean.substring(1);
+        if (clean.length >= 10) {
+            console.log(`📱 Berhasil ambil nomor HP dari isi pesan chat: ${clean}`);
+            lidToPhoneCache.set(lidUser, clean);
+            return clean;
+        }
+    }
+
+    // Fallback terakhir: user ID
+    return lidUser;
+}
+
+/**
+ * Mengambil dan menormalisasi daftar nomor admin / nomor khusus
+ * Mendukung format: 08xxx, 628xxx, +62 8xxx, dipisahkan koma atau newline
+ * Sumber: kb.special_numbers, kb.admin_numbers, process.env.ADMIN_PHONE, process.env.SPECIAL_NUMBERS
+ */
+function getAdminNumberList(kb) {
+    const rawList = [
+        kb?.special_numbers,
+        kb?.admin_numbers,
+        process.env.ADMIN_PHONE,
+        process.env.SPECIAL_NUMBERS
+    ].filter(Boolean).join('\n');
+
+    if (!rawList) return [];
+
+    const numbers = rawList.split(/[\n,]+/).map(n => n.trim()).filter(Boolean);
+    const unique = new Set();
+
+    for (const num of numbers) {
+        let clean = num.replace(/\D/g, '');
+        if (!clean) continue;
+        if (clean.startsWith('0')) {
+            clean = '62' + clean.substring(1);
+        } else if (!clean.startsWith('62') && clean.length >= 9) {
+            clean = '62' + clean;
+        }
+        if (clean.length >= 10) {
+            unique.add(clean);
+        }
+    }
+    return Array.from(unique);
+}
+
+/**
  * Fungsi utama untuk menjalankan Bot WA untuk user tertentu
  */
 async function startWhatsAppBot(userId, onStatus) {
@@ -113,7 +279,7 @@ async function startWhatsAppBot(userId, onStatus) {
         browser: ['AsistenLapak AI', 'Chrome', '1.0.0']
     });
 
-    activeSessions[userId] = { sock: sock, status: 'CONNECTING', qr: null, pendingOrder: null };
+    activeSessions[userId] = { sock: sock, status: 'CONNECTING', qr: null, customers: {} };
 
     // Mendengarkan perubahan status koneksi (QR Code, Connected, Disconnected)
     sock.ev.on('connection.update', async (update) => {
@@ -154,7 +320,8 @@ async function startWhatsAppBot(userId, onStatus) {
         if (!msg.message || msg.key.fromMe) return; // Abaikan pesan sendiri atau status
 
         const senderJid = msg.key.remoteJid;
-        const customerPhone = senderJid.split('@')[0];
+        const rawSenderNum = senderJid.split('@')[0].split(':')[0];
+        const customerPhone = await resolveCustomerPhoneNumber(msg, sock, userId);
         const customerName = msg.pushName || customerPhone;
         const imageMessage = msg.message.imageMessage || msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
         const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text || msg.message.imageMessage?.caption || "";
@@ -166,7 +333,7 @@ async function startWhatsAppBot(userId, onStatus) {
         try {
             const { data } = await supabase
                 .from('knowledge_base')
-                .select('store_rules, system_prompt, blocked_numbers, special_numbers')
+                .select('store_rules, system_prompt, blocked_numbers, special_numbers, admin_numbers')
                 .eq('user_id', userId)
                 .single();
             kb = data;
@@ -175,7 +342,7 @@ async function startWhatsAppBot(userId, onStatus) {
         }
 
         // Cek apakah nomor diblokir atau merupakan nomor khusus/admin
-        if (kb && (kb.blocked_numbers || kb.special_numbers)) {
+        if (kb && (kb.blocked_numbers || kb.special_numbers || kb.admin_numbers)) {
             let ignoreList = [];
             if (kb.blocked_numbers) {
                 ignoreList = ignoreList.concat(kb.blocked_numbers.split(/[\n,]+/).map(n => n.trim()).filter(Boolean));
@@ -183,15 +350,18 @@ async function startWhatsAppBot(userId, onStatus) {
             if (kb.special_numbers) {
                 ignoreList = ignoreList.concat(kb.special_numbers.split(/[\n,]+/).map(n => n.trim()).filter(Boolean));
             }
+            if (kb.admin_numbers) {
+                ignoreList = ignoreList.concat(kb.admin_numbers.split(/[\n,]+/).map(n => n.trim()).filter(Boolean));
+            }
             
             const isIgnored = ignoreList.some(ignoredNum => {
-                if (ignoredNum === customerPhone) return true;
+                if (ignoredNum === customerPhone || ignoredNum === rawSenderNum) return true;
                 // Jika UI menambahkan '62' di depan secara paksa, kita hapus 62 nya dan cocokkan
-                if (ignoredNum.replace(/^62/, '') === customerPhone) return true;
+                if (ignoredNum.replace(/^62/, '') === customerPhone || ignoredNum.replace(/^62/, '') === rawSenderNum) return true;
                 // Atau jika customerPhone yang ada 62 nya tapi di database nggak ada
                 if (customerPhone.replace(/^62/, '') === ignoredNum.replace(/^62/, '')) return true;
                 // Atau jika format di database pakai '0' di depan
-                if (ignoredNum.replace(/^0/, '62') === customerPhone) return true;
+                if (ignoredNum.replace(/^0/, '62') === customerPhone || ignoredNum.replace(/^0/, '62') === rawSenderNum) return true;
                 return false;
             });
 
@@ -205,6 +375,9 @@ async function startWhatsAppBot(userId, onStatus) {
 
         // Simpan ke in-memory history SEGERA
         addToMemory(userId, customerPhone, 'customer', textMessage);
+
+        // Ambil sesi terisolasi untuk pelanggan ini
+        const custSession = getCustomerSession(userId, customerPhone);
 
         // 1. Simpan pesan pelanggan ke Supabase (best-effort, tidak block proses)
         supabase.from('chats').insert([{
@@ -243,7 +416,7 @@ async function startWhatsAppBot(userId, onStatus) {
                     .select('sender, message')
                     .eq('user_id', userId)
                     .eq('customer_phone', customerPhone)
-                    .order('id', { ascending: false })
+                    .order('created_at', { ascending: false })
                     .limit(15);
                 if (historyError) console.warn("⚠️ Gagal ambil histori Supabase:", historyError.message);
                 if (chatHistory && chatHistory.length > 0) {
@@ -303,21 +476,27 @@ async function startWhatsAppBot(userId, onStatus) {
                     console.log(`✅ Balas (Gemini) ke ${customerName}: ${aiReply}`);
                     
                     // Logika forward ke Admin
-                    if (isForwardToAdmin && kb && kb.special_numbers) {
-                        const adminNumbers = kb.special_numbers.split(/[\n,]+/).map(n => n.trim()).filter(Boolean);
-                        for (const adminNum of adminNumbers) {
-                            let formattedAdmin = adminNum;
-                            if (formattedAdmin.startsWith('0')) formattedAdmin = '62' + formattedAdmin.substring(1);
-                            formattedAdmin = formattedAdmin.replace(/\D/g, '');
-                            const adminJid = formattedAdmin + '@s.whatsapp.net';
-                            
-                            const forwardMsg = `🚨 *PANGGILAN ADMIN* 🚨\n\nPelanggan butuh bantuan admin.\n\n👤 Nama: ${customerName}\n📱 No: ${customerPhone}\n💬 Pesan: "${textMessage}"\n\nBalas ke: wa.me/${customerPhone}`;
-                            
+                    if (isForwardToAdmin) {
+                        const adminList = getAdminNumberList(kb);
+                        let formattedCustPhone = customerPhone;
+                        if (formattedCustPhone.startsWith('0')) formattedCustPhone = '62' + formattedCustPhone.substring(1);
+                        formattedCustPhone = formattedCustPhone.replace(/\D/g, '');
+
+                        const isLid = formattedCustPhone.length >= 14 && !formattedCustPhone.startsWith('628');
+                        const phoneDisplay = isLid ? `${formattedCustPhone} (ID WhatsApp)` : `+${formattedCustPhone}`;
+                        const actionLink = isLid
+                            ? `_Pelanggan menggunakan WhatsApp Multi-Device (LID). Balas langsung via room chat WhatsApp bot._`
+                            : `Balas ke: https://wa.me/${formattedCustPhone}`;
+
+                        const forwardMsg = `🚨 *PANGGILAN ADMIN* 🚨\n\nPelanggan butuh bantuan admin.\n\n👤 Nama: ${customerName}\n📱 No: ${phoneDisplay}\n💬 Pesan: "${textMessage}"\n\n${actionLink}`;
+
+                        for (const adminNum of adminList) {
+                            const adminJid = adminNum + '@s.whatsapp.net';
                             try {
                                 await sock.sendMessage(adminJid, { text: forwardMsg });
-                                console.log(`✅ Forwarded to admin ${formattedAdmin} (Image Block)`);
+                                console.log(`✅ Forwarded to admin ${adminNum} (Image Block)`);
                             } catch (err) {
-                                console.error(`Gagal forward ke admin ${formattedAdmin}:`, err.message);
+                                console.error(`Gagal forward ke admin ${adminNum}:`, err.message);
                             }
                         }
                     }
@@ -353,10 +532,10 @@ async function startWhatsAppBot(userId, onStatus) {
                 const kotaMatch = text.match(/kota\s+([a-zA-Z\s]+?)(?:,|\n|$)/i) || text.match(/kab(?:upaten)?\.?\s+([a-zA-Z\s]+?)(?:,|\n|$)/i);
                 
                 if (kecMatch && kotaMatch) {
-                    return `${kecMatch[1].trim()} ${kotaMatch[1].trim()}`;
+                    return cleanAndValidateLocation(`${kecMatch[1].trim()} ${kotaMatch[1].trim()}`);
                 }
-                if (kecMatch) return kecMatch[1].trim();
-                if (kotaMatch) return kotaMatch[1].trim();
+                if (kecMatch) return cleanAndValidateLocation(kecMatch[1].trim());
+                if (kotaMatch) return cleanAndValidateLocation(kotaMatch[1].trim());
                 return null;
             }
 
@@ -404,19 +583,85 @@ async function startWhatsAppBot(userId, onStatus) {
                 if (isJNT) kurirDipilih = 'J&T EXPRESS';
                 else if (isJNE) kurirDipilih = 'JNE REG';
 
-                // === PRIMARY: Gunakan pendingOrder cache (paling akurat) ===
-                const pendingOrder = activeSessions[userId]?.pendingOrder;
+                let pendingOrder = custSession.pendingOrder;
+                const queryLokasiBaru = intentData.location || cleanAndValidateLocation(textMessage);
+
+                // Jika pendingOrder belum ada ATAU pesan mengandung lokasi/alamat baru yang belum ada rate-nya
+                const needOrderExtraction = !pendingOrder || !pendingOrder.produk || (queryLokasiBaru && (!pendingOrder.destLabel || !pendingOrder.destLabel.toLowerCase().includes(queryLokasiBaru.toLowerCase())));
+
+                if (needOrderExtraction) {
+                    console.log(`🔍 Mengekstrak detail pesanan terkini menggunakan AI Order Extractor...`);
+                    try {
+                        const orderExtract = await extractOrderDetails(textMessage, history, storeRules, products);
+                        console.log(`📦 Hasil ekstraksi order:`, orderExtract);
+
+                        if (orderExtract) {
+                            const targetLokasi = orderExtract.lokasi_ongkir || queryLokasiBaru || custSession.lastDestination?.destLabel;
+                            let shippingRates = null;
+                            let destLabel = targetLokasi || custSession.lastDestination?.destLabel || '-';
+                            let destId = custSession.lastDestination?.destId || null;
+
+                            if (targetLokasi && targetLokasi.length >= 3) {
+                                try {
+                                    const destinations = await searchDestination(targetLokasi);
+                                    if (destinations && destinations.length > 0) {
+                                        const target = destinations[0];
+                                        destId = target.id || target.subdistrict_id || target.city_id;
+                                        destLabel = target.label || targetLokasi;
+                                        const beratGram = Math.max(1000, (orderExtract.qty || 1) * 1000);
+                                        shippingRates = await calculateShipping(destId, beratGram);
+                                    }
+                                } catch (sErr) {
+                                    console.warn('⚠️ Gagal hitung tarif ongkir:', sErr.message);
+                                }
+                            }
+
+                            if (!shippingRates && destId) {
+                                try {
+                                    const beratGram = Math.max(1000, (orderExtract.qty || 1) * 1000);
+                                    shippingRates = await calculateShipping(destId, beratGram);
+                                } catch (e) {}
+                            }
+
+                            if (orderExtract.kurir) {
+                                const k = orderExtract.kurir.toLowerCase();
+                                if (k.includes('jnt') || k.includes('j&t')) kurirDipilih = 'J&T EXPRESS';
+                                else if (k.includes('jne')) kurirDipilih = 'JNE REG';
+                            }
+
+                            const qtyParsed = Number(orderExtract.qty) || 1;
+                            const unitName = orderExtract.unit || (qtyParsed > 1 ? 'paket' : 'pcs');
+                            const namaProd = orderExtract.produk || 'Produk';
+                            const totalB = Number(orderExtract.total_harga_barang) || 0;
+
+                            custSession.pendingOrder = {
+                                produk: `${namaProd} x ${qtyParsed} ${unitName}`,
+                                qty: qtyParsed,
+                                totalBarang: totalB,
+                                namaPenerima: orderExtract.nama_penerima || customerName,
+                                alamat: orderExtract.alamat || destLabel,
+                                destLabel: destLabel,
+                                orderBeratKg: Math.ceil(Math.max(1000, qtyParsed * 1000) / 1000),
+                                shippingRates: shippingRates || []
+                            };
+                            pendingOrder = custSession.pendingOrder;
+                        }
+                    } catch (extErr) {
+                        console.warn('⚠️ Gagal extractOrderDetails:', extErr.message);
+                    }
+                }
+
                 let produk, namaPenerima, alamat, hargaBarangDisplay, ongkirFinal, grandTotalFinal;
 
-                if (pendingOrder) {
-                    produk = pendingOrder.produk || '-';
+                if (pendingOrder && pendingOrder.produk) {
+                    produk = pendingOrder.produk;
                     namaPenerima = pendingOrder.namaPenerima || customerName;
-                    alamat = pendingOrder.alamat || '-';
+                    alamat = pendingOrder.alamat || custSession.lastDestination?.destLabel || '-';
 
                     // Pilih ongkir sesuai kurir yang dipilih user
                     let selectedRate = null;
                     if (pendingOrder.shippingRates && pendingOrder.shippingRates.length > 0) {
-                        if (isJNT) {
+                        if (kurirDipilih.includes('J&T')) {
                             selectedRate = pendingOrder.shippingRates.find(r => {
                                 const n = (r.name || r.courier || '').toLowerCase();
                                 return n.includes('jnt') || n.includes('j&t');
@@ -430,72 +675,28 @@ async function startWhatsAppBot(userId, onStatus) {
                         if (!selectedRate) selectedRate = pendingOrder.shippingRates[0];
                     }
 
-                    ongkirFinal = selectedRate ? Number(selectedRate.cost || selectedRate.price || 0) : 0;
+                    const ratePerKg = Number(selectedRate ? (selectedRate.cost || selectedRate.price || 0) : 0);
+                    ongkirFinal = ratePerKg;
                     grandTotalFinal = (pendingOrder.totalBarang || 0) + ongkirFinal;
                     hargaBarangDisplay = (pendingOrder.totalBarang || 0).toLocaleString('id-ID');
 
                     // Bersihkan cache setelah dipakai
-                    activeSessions[userId].pendingOrder = null;
+                    custSession.pendingOrder = null;
                     console.log(`✅ Invoice dari pendingOrder: ${produk}, harga: ${pendingOrder.totalBarang}, ongkir: ${ongkirFinal}`);
 
                 } else {
-                    // === FALLBACK: Cari dari seluruh riwayat chat ===
-                    console.warn('⚠️ pendingOrder tidak ada, fallback ke parsing riwayat chat');
-                    const aiMsgs = history.filter(h => h.sender === 'ai');
-                    const custMsgsText = history.filter(h => h.sender === 'customer').map(h => h.message || '').join('\n');
-                    const allHistText = history.map(h => h.message || '').join(' ').toLowerCase();
-
-                    // Cari harga barang dari SEMUA pesan AI (bukan hanya yang terakhir)
-                    let hargaBarangInt = 0;
-                    for (const msg of aiMsgs.slice().reverse()) {
-                        const m = (msg.message || '').match(/💰 Harga Barang: Rp ([\d.]+)/i);
-                        if (m) { hargaBarangInt = parseInt(m[1].replace(/\./g, '')) || 0; break; }
-                    }
-
-                    // Cari ongkir berdasarkan kurir yang dipilih dari semua pesan AI
-                    let ongkirFromMsg = 0;
-                    const kurirKey = isJNT ? 'J&T' : 'JNE';
-                    for (const msg of aiMsgs.slice().reverse()) {
-                        const m = (msg.message || '').match(new RegExp(`\\*${kurirKey}[^*]*\\*[:\\s]*Rp ([\\d.]+)`, 'i'))
-                            || (msg.message || '').match(new RegExp(`${kurirKey}[^:]*:\\s*Rp ([\\d.]+)`, 'i'));
-                        if (m) { ongkirFromMsg = parseInt(m[1].replace(/\./g, '')) || 0; break; }
-                    }
-
-                    // Cari nama produk dari semua pesan AI
-                    let produkFromHistory = '-';
-                    for (const msg of aiMsgs.slice().reverse()) {
-                        const m = (msg.message || '').match(/📦 Produk: (.+?)(?:\n|$)/i);
-                        if (m) { produkFromHistory = m[1].trim(); break; }
-                    }
-                    // Fallback: cocokkan nama produk dari katalog dengan riwayat chat
-                    if (produkFromHistory === '-' && products && products.length > 0) {
-                        const found = products.find(p => {
-                            const n = (p.name || p.title || '').toLowerCase();
-                            return n.length > 2 && allHistText.includes(n);
-                        });
-                        if (found) {
-                            const qtyM = allHistText.match(/(\d+)\s*pcs/i);
-                            const qty = qtyM ? parseInt(qtyM[1]) : 1;
-                            produkFromHistory = `${found.name || found.title} x ${qty} pcs`;
-                            if (hargaBarangInt === 0) hargaBarangInt = Number(found.price || 0) * qty;
-                        }
-                    }
-
-                    // Cari nama penerima & alamat dari pesan pelanggan
-                    const allCustAndCurrent = custMsgsText + '\n' + textMessage;
-                    const namaM = allCustAndCurrent.match(/nama\s+([a-zA-Z\s]+?)(?:\s*,|\s+alamat|\s+jl|\s+kec|\n|$)/i);
-                    const namaFromHist = namaM ? namaM[1].trim() : customerName;
-                    const jlM = allCustAndCurrent.match(/(?:jl\.|jalan)\s+.+?(?=,\s*kec|,\s*kel|\n|$)/i);
-                    const kecM = allCustAndCurrent.match(/kec(?:amatan)?\s*[\w\s]+/i);
-                    const alamatFromHist = [jlM?.[0], kecM?.[0]].filter(Boolean).join(', ') || '-';
-
-                    produk = produkFromHistory;
-                    namaPenerima = namaFromHist;
-                    alamat = alamatFromHist;
-                    ongkirFinal = ongkirFromMsg;
-                    grandTotalFinal = hargaBarangInt + ongkirFinal;
+                    // Fallback cerdas HANYA dari pesan AI terakhir dalam obrolan saat ini
+                    console.warn('⚠️ pendingOrder tidak ditemukan, parsing pesan AI terakhir saja');
+                    const lastAIMsg = history.filter(h => h.sender === 'ai').slice(-1)[0]?.message || '';
+                    const hargaMatch = lastAIMsg.match(/Rp\s*([\d\.]+)/);
+                    const hargaBarangInt = hargaMatch ? parseInt(hargaMatch[1].replace(/\./g, '')) || 0 : 0;
+                    
+                    produk = 'Pesanan Promo';
+                    namaPenerima = customerName;
+                    alamat = intentData.location || '-';
+                    ongkirFinal = 0;
+                    grandTotalFinal = hargaBarangInt;
                     hargaBarangDisplay = hargaBarangInt.toLocaleString('id-ID');
-                    console.log(`⚠️ Invoice fallback: produk=${produk}, harga=${hargaBarangInt}, ongkir=${ongkirFinal}`);
                 }
 
                 const rekeningLine = kb?.store_rules?.match(/(?:rekening|transfer|BCA|Mandiri|BRI|bank)[^\n]*/i)?.[0] 
@@ -580,8 +781,47 @@ async function startWhatsAppBot(userId, onStatus) {
                 aiReply = "Baik kak, pesanannya sudah kami batalkan ya. Jika ada yang ingin ditanyakan lagi, jangan ragu untuk menghubungi kami kembali! 🙏";
                 console.log(`✅ Batal dari ${customerName}`);
             } else if (intent === 'CHECK_SHIPPING') {
-                const queryLokasi = intentData.location;
-                console.log(`🔍 Query ongkir dari pesan: "${queryLokasi}"`);
+                let queryLokasi = cleanAndValidateLocation(intentData.location);
+
+                // 1. Coba ambil dari Quoted Message jika pelanggan mengutip pesan bot sebelumnya (misal info ongkir lama)
+                const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+                const quotedText = quotedMsg?.conversation || quotedMsg?.extendedTextMessage?.text || quotedMsg?.imageMessage?.caption || "";
+                if (!queryLokasi && quotedText) {
+                    const quotedLocMatch = quotedText.match(/Ongkir ke \*?([^\*\(\n\r]+?)(?:\s*\(|\*|\n|$)/i);
+                    if (quotedLocMatch) {
+                        const cand = cleanAndValidateLocation(quotedLocMatch[1]);
+                        if (cand) {
+                            queryLokasi = cand;
+                            console.log(`📍 Lokasi diambil dari quoted message: "${queryLokasi}"`);
+                        }
+                    }
+                }
+
+                // 2. Coba dari session lastDestination jika ada
+                if (!queryLokasi && custSession?.lastDestination) {
+                    queryLokasi = custSession.lastDestination.destLabel || custSession.lastDestination.query;
+                    console.log(`📍 Lokasi diambil dari session lastDestination: "${queryLokasi}"`);
+                }
+
+                // 3. Coba dari riwayat chat
+                if (!queryLokasi && history && history.length > 0) {
+                    const aiShipMsg = history.filter(h => h.sender === 'ai' && /ongkir ke/i.test(h.message || '')).slice(-1)[0];
+                    if (aiShipMsg) {
+                        const histLocMatch = aiShipMsg.message.match(/Ongkir ke \*?([^\*\(\n\r]+?)(?:\s*\(|\*|\n|$)/i);
+                        if (histLocMatch) {
+                            const cand = cleanAndValidateLocation(histLocMatch[1]);
+                            if (cand) {
+                                queryLokasi = cand;
+                                console.log(`📍 Lokasi diambil dari history ongkir AI: "${queryLokasi}"`);
+                            }
+                        }
+                    }
+                    if (!queryLokasi) {
+                        queryLokasi = cleanAndValidateLocation(extractLokasiFromHistory(history));
+                    }
+                }
+
+                console.log(`🔍 Final query ongkir: "${queryLokasi}"`);
 
                 if (queryLokasi && queryLokasi.length >= 3) {
                     const destinations = await searchDestination(queryLokasi);
@@ -593,24 +833,26 @@ async function startWhatsAppBot(userId, onStatus) {
 
                         console.log(`📍 Destinasi ditemukan: ${destLabel} (ID: ${destId})`);
                         
-                        // Cari qty dan berat sebelum hitung ongkir
-                        const allHistTextShip = history.map(h => h.message || '').join(' ').toLowerCase();
-                        const allHistRawShip = history.map(h => h.message || '').join('\n');
-                        let foundProduct = null, foundQty = 1;
-                        if (products && products.length > 0) {
-                            foundProduct = products.find(p => {
-                                const pName = (p.name || p.title || '').toLowerCase();
-                                return pName.length > 2 && allHistTextShip.includes(pName);
-                            });
+                        // Simpan ke session untuk pertanyaan lanjutan (misal user tanya "kalau perkilo berapa")
+                        custSession.lastDestination = {
+                            destId: destId,
+                            destLabel: destLabel,
+                            query: queryLokasi
+                        };
+
+                        // STANDAR CEK ONGKIR ADALAH PER KILO (1 kg / 1.000 gram)
+                        // Kecuali jika pelanggan secara eksplisit menyebut berat tertentu di chat saat ini (misal: "ongkir 3 kg berapa")
+                        const explicitKgMatch = textMessage.match(/(\d+)\s*(?:kg|kilo)\b/i);
+                        const isExplicitPerKilo = /per[\s\-]?kilo|per[\s\-]?kg|\b1\s*(?:kg|kilo)\b/i.test(textMessage);
+
+                        let beratKg = 1;
+                        if (explicitKgMatch && !isExplicitPerKilo) {
+                            beratKg = parseInt(explicitKgMatch[1]) || 1;
+                        } else {
+                            beratKg = 1; // Default selalu 1 kg (per kilo)
                         }
-                        if (foundProduct) {
-                            const qtyM2 = allHistTextShip.match(/(\d+)\s*pcs/i) || allHistTextShip.match(/(\d+)\s*buah/i) || allHistTextShip.match(/(\d+)\s*kg/i);
-                            if (qtyM2) foundQty = parseInt(qtyM2[1]);
-                        }
-                        
-                        const unitWeight = foundProduct?.weight || 1000;
-                        const totalWeight = foundQty * unitWeight;
-                        const beratKg = Math.ceil(totalWeight / 1000);
+                        const totalWeight = beratKg * 1000;
+                        console.log(`⚖️ Hitung ongkir dengan berat: ${beratKg} kg (${totalWeight} gram)`);
 
                         const shippingRates = await calculateShipping(destId, totalWeight);
 
@@ -627,32 +869,53 @@ async function startWhatsAppBot(userId, onStatus) {
                                 const etd = (r.etd || '1-3').replace(/day/gi,'').replace(/hari/gi,'').trim();
                                 const n = (r.name || r.courier || '').toLowerCase();
                                 const kurir = (n.includes('jnt') || n.includes('j&t')) ? 'J&T EXPRESS' : 'JNE REG';
-                                return `• *${kurir}*: Rp ${harga} (est. ${etd} hari)`;
+                                return `• *${kurir}*: Rp ${harga} (est. ${etd || '1-3'} hari)`;
                             }).join('\n');
-                            aiReply = `Ongkir ke *${destLabel}* (berat ${beratKg} kg):\n\n${listOngkir}\n\nMau pilih *JNE REG* atau *J&T* kak? 😊`;
+
+                            const beratLabel = beratKg === 1 ? 'per kg' : `berat ${beratKg} kg`;
+                            aiReply = `Ongkir ke *${destLabel}* (${beratLabel}):\n\n${listOngkir}\n\nMau pilih *JNE REG* atau *J&T* kak? 😊`;
 
                             // =============================================
                             // Cache order context untuk SELECT_COURIER nanti
                             // =============================================
                             try {
+                                const allHistTextShip = history.map(h => h.message || '').join(' ').toLowerCase();
+                                const allHistRawShip = history.map(h => h.message || '').join('\n');
+                                let foundProduct = null, foundQty = 1;
+                                if (products && products.length > 0) {
+                                    foundProduct = products.find(p => {
+                                        const pName = (p.name || p.title || '').toLowerCase();
+                                        return pName.length > 2 && allHistTextShip.includes(pName);
+                                    });
+                                }
                                 if (foundProduct) {
+                                    const qtyM2 = allHistTextShip.match(/(\d+)\s*pcs/i) || allHistTextShip.match(/(\d+)\s*buah/i);
+                                    if (qtyM2) foundQty = parseInt(qtyM2[1]);
+
                                     const namaM2 = (textMessage + '\n' + allHistRawShip).match(/nama\s+([a-zA-Z\s]+?)(?:\s*,|\s+alamat|\s+jl|\s+kec|\n|$)/i);
                                     const foundNama = namaM2 ? namaM2[1].trim() : customerName;
                                     const alamatSrc2 = textMessage + '\n' + allHistRawShip;
                                     const jlM2 = alamatSrc2.match(/(?:jl\.|jalan)\s+.+?(?=,\s*kec|,\s*kel|\n|$)/i);
                                     const kecM2 = alamatSrc2.match(/kec(?:amatan)?\s*[\w\s]+/i);
                                     const foundAlamat = [jlM2?.[0], kecM2?.[0]].filter(Boolean).join(', ') || destLabel;
-                                    activeSessions[userId].pendingOrder = {
+
+                                    const unitWeight = foundProduct?.weight || 1000;
+                                    const orderTotalWeight = foundQty * unitWeight;
+                                    const orderBeratKg = Math.ceil(orderTotalWeight / 1000);
+
+                                    custSession.pendingOrder = {
                                         produk: `${foundProduct.name || foundProduct.title} x ${foundQty} pcs`,
                                         qty: foundQty,
                                         hargaProduk: Number(foundProduct.price || 0),
                                         totalBarang: Number(foundProduct.price || 0) * foundQty,
                                         namaPenerima: foundNama,
                                         alamat: foundAlamat,
+                                        destId: destId,
                                         destLabel: destLabel,
+                                        orderBeratKg: orderBeratKg,
                                         shippingRates: displayRates
                                     };
-                                    console.log(`📦 pendingOrder cached (CHECK_SHIPPING): ${foundProduct.name} x${foundQty}, total: ${activeSessions[userId].pendingOrder.totalBarang}`);
+                                    console.log(`📦 pendingOrder cached (CHECK_SHIPPING): ${foundProduct.name} x${foundQty}, total: ${custSession.pendingOrder.totalBarang}`);
                                 }
                             } catch (cacheErr) {
                                 console.warn('⚠️ Gagal cache pendingOrder di CHECK_SHIPPING:', cacheErr.message);
@@ -789,7 +1052,7 @@ async function startWhatsAppBot(userId, onStatus) {
                     console.log(`✅ Custom Invoice Pesanan untuk ${namaPenerima}`);
 
                     // Cache order data untuk SELECT_COURIER
-                    activeSessions[userId].pendingOrder = {
+                    custSession.pendingOrder = {
                         produk: `${produkOrdered} x ${qty} pcs`,
                         qty: qty,
                         hargaProduk: hargaProduk,
@@ -849,50 +1112,91 @@ async function startWhatsAppBot(userId, onStatus) {
             } else if (intent === 'SELECT_COURIER') {
                 isInvoiceFinal = true;
                 finalInvoiceText = aiReply;
+            } else if (
+                /(?:INVOICE\s*(?:FINAL|PESANAN|TAGIHAN)|📋\s*\*?INVOICE)/i.test(aiReply) &&
+                /(?:TOTAL|Total\s*Tagihan|Total\s*Harga|Total\s*Transfer|Silakan\s+transfer)/i.test(aiReply) &&
+                /(?:Penerima|Alamat|Rekening|Transfer|BCA|Mandiri|BRI|BNI|Bank)/i.test(aiReply)
+            ) {
+                isInvoiceFinal = true;
+                finalInvoiceText = aiReply;
+                console.log(`📋 Deteksi format invoice otomatis dari teks AI`);
             }
 
             // Kirim balasan ke WhatsApp pelanggan
             await sock.sendMessage(senderJid, { text: aiReply });
             console.log(`✅ Balas ke ${customerName}: ${aiReply.substring(0, 100)}`);
 
-            // Logika forward ke Admin
-            if (isForwardToAdmin && kb && kb.special_numbers) {
-                const adminNumbers = kb.special_numbers.split(/[\n,]+/).map(n => n.trim()).filter(Boolean);
-                for (const adminNum of adminNumbers) {
-                    let formattedAdmin = adminNum;
-                    if (formattedAdmin.startsWith('0')) formattedAdmin = '62' + formattedAdmin.substring(1);
-                    // Hapus jika masih ada '62' dobel atau bukan angka
-                    formattedAdmin = formattedAdmin.replace(/\D/g, '');
-                    const adminJid = formattedAdmin + '@s.whatsapp.net';
-                    
-                    const forwardMsg = `🚨 *PANGGILAN ADMIN* 🚨\n\nPelanggan butuh bantuan admin.\n\n👤 Nama: ${customerName}\n📱 No: ${customerPhone}\n💬 Pesan: "${textMessage}"\n\nBalas ke: wa.me/${customerPhone}`;
-                    
+            // Logika forward ke Admin (Bantuan/Handover)
+            if (isForwardToAdmin) {
+                const adminList = getAdminNumberList(kb);
+                let formattedCustPhone = customerPhone;
+                if (formattedCustPhone.startsWith('0')) formattedCustPhone = '62' + formattedCustPhone.substring(1);
+                formattedCustPhone = formattedCustPhone.replace(/\D/g, '');
+
+                const isLid = formattedCustPhone.length >= 14 && !formattedCustPhone.startsWith('628');
+                const phoneDisplay = isLid ? `${formattedCustPhone} (ID WhatsApp)` : `+${formattedCustPhone}`;
+                const actionLink = isLid
+                    ? `_Pelanggan menggunakan WhatsApp Multi-Device (LID). Balas langsung via room chat WhatsApp bot._`
+                    : `Balas ke: https://wa.me/${formattedCustPhone}`;
+
+                const forwardMsg = `🚨 *PANGGILAN ADMIN* 🚨\n\nPelanggan butuh bantuan admin.\n\n👤 Nama: ${customerName}\n📱 No: ${phoneDisplay}\n💬 Pesan: "${textMessage}"\n\n${actionLink}`;
+
+                for (const adminNum of adminList) {
+                    const adminJid = adminNum + '@s.whatsapp.net';
                     try {
                         await sock.sendMessage(adminJid, { text: forwardMsg });
-                        console.log(`✅ Forwarded to admin ${formattedAdmin}`);
+                        console.log(`✅ Forwarded bantuan ke admin ${adminNum}`);
                     } catch (err) {
-                        console.error(`Gagal forward ke admin ${formattedAdmin}:`, err.message);
+                        console.error(`Gagal forward bantuan ke admin ${adminNum}:`, err.message);
                     }
                 }
             }
 
             // Logika forward Invoice ke Admin (Nomor Khusus)
-            if (isInvoiceFinal && kb && kb.special_numbers) {
-                const adminNumbers = kb.special_numbers.split(/[\n,]+/).map(n => n.trim()).filter(Boolean);
-                for (const adminNum of adminNumbers) {
-                    let formattedAdmin = adminNum;
-                    if (formattedAdmin.startsWith('0')) formattedAdmin = '62' + formattedAdmin.substring(1);
-                    formattedAdmin = formattedAdmin.replace(/\D/g, '');
-                    const adminJid = formattedAdmin + '@s.whatsapp.net';
-                    
-                    const forwardMsg = `🚨 *INVOICE BARU DARI PELANGGAN* 🚨\n\n👤 Nama: ${customerName}\n📱 No: ${customerPhone}\n\n*Isi Invoice:*\n${finalInvoiceText}`;
-                    
-                    try {
-                        await sock.sendMessage(adminJid, { text: forwardMsg });
-                        console.log(`✅ Invoice forwarded to admin ${formattedAdmin}`);
-                    } catch (err) {
-                        console.error(`Gagal forward invoice ke admin ${formattedAdmin}:`, err.message);
+            if (isInvoiceFinal) {
+                const adminList = getAdminNumberList(kb);
+                console.log(`📤 Mengecek nomor admin untuk forward invoice. Ditemukan: ${adminList.length} nomor (${adminList.join(', ')})`);
+                if (adminList.length > 0) {
+                    let formattedCustPhone = customerPhone;
+                    if (formattedCustPhone.startsWith('0')) formattedCustPhone = '62' + formattedCustPhone.substring(1);
+                    formattedCustPhone = formattedCustPhone.replace(/\D/g, '');
+
+                    const isLid = formattedCustPhone.length >= 14 && !formattedCustPhone.startsWith('628');
+                    const phoneDisplay = isLid ? `${formattedCustPhone} (ID WhatsApp)` : `+${formattedCustPhone}`;
+                    const chatLink = isLid ? '' : `🔗 *Chat Pelanggan:* https://wa.me/${formattedCustPhone}\n\n`;
+
+                    // Ambil nama penerima dari invoice jika ada
+                    const namaMatch = finalInvoiceText.match(/Penerima:\s*([^\n]+)/i);
+                    const displayName = namaMatch ? namaMatch[1].replace(/[\*\_]/g, '').trim() : customerName;
+
+                    // Bersihkan tag rahasia jika ada
+                    const cleanInvoice = finalInvoiceText
+                        .replace(/\[SAVE_INVOICE:\d+\]/gi, '')
+                        .replace(/\[FORWARD_TO_ADMIN\]/gi, '')
+                        .trim();
+
+                    const forwardInvoiceMsg = `📋 *INVOICE PESANAN BARU* 📋\n\n` +
+                        `Pelanggan telah mencapai tahap invoice:\n` +
+                        `👤 *Nama:* ${displayName}\n` +
+                        `📱 *WhatsApp:* ${phoneDisplay}\n` +
+                        chatLink +
+                        `━━━━━━━━━━━━━━━━━\n` +
+                        `*RINCIAN INVOICE:*\n` +
+                        `${cleanInvoice}\n` +
+                        `━━━━━━━━━━━━━━━━━\n\n` +
+                        `💡 _Segera follow up atau siapkan pesanan jika pembayaran telah dikonfirmasi._`;
+
+                    for (const adminNum of adminList) {
+                        const adminJid = adminNum + '@s.whatsapp.net';
+                        try {
+                            await sock.sendMessage(adminJid, { text: forwardInvoiceMsg });
+                            console.log(`✅ Invoice berhasil diteruskan ke admin/nomor khusus: ${adminNum}`);
+                        } catch (err) {
+                            console.error(`❌ Gagal meneruskan invoice ke admin ${adminNum}:`, err.message);
+                        }
                     }
+                } else {
+                    console.warn(`⚠️ Invoice terdeteksi tapi belum ada nomor admin / nomor khusus yang disetel di dashboard (knowledge_base)!`);
                 }
             }
 

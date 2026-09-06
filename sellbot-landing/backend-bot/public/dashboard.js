@@ -10,20 +10,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     const navItems = document.querySelectorAll('.sidebar-nav .nav-item');
     const sections = document.querySelectorAll('.dashboard-section');
 
+    window.switchDashboardTab = function(targetId) {
+        navItems.forEach(nav => nav.classList.remove('active'));
+        const targetNav = document.querySelector(`.sidebar-nav .nav-item[data-target="${targetId}"]`);
+        if (targetNav) targetNav.classList.add('active');
+        sections.forEach(section => section.classList.remove('active'));
+        const targetSection = document.getElementById(targetId);
+        if (targetSection) {
+            targetSection.classList.add('active');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    };
+
     navItems.forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
-            navItems.forEach(nav => nav.classList.remove('active'));
-            item.classList.add('active');
-            sections.forEach(section => section.classList.remove('active'));
             const targetId = item.getAttribute('data-target');
-            if (targetId) {
-                const targetSection = document.getElementById(targetId);
-                if (targetSection) {
-                    targetSection.classList.add('active');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
-            }
+            if (targetId) window.switchDashboardTab(targetId);
         });
     });
 
@@ -32,12 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (viewInboxLink) {
         viewInboxLink.addEventListener('click', (e) => {
             e.preventDefault();
-            // Buka modal riwayat semua chat atau detail chat pertama
-            if (chatsData.length > 0) {
-                openChatDetail(chatsData[0].customer_phone, chatsData[0].customer_name);
-            } else {
-                showToast('Belum ada riwayat chat untuk ditampilkan', 'info');
-            }
+            window.switchDashboardTab('chat-history');
         });
     }
 
@@ -771,22 +769,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 6. CHAT HISTORY DETAIL MODAL
     // =============================================
     window.openChatDetail = async function (phone, name) {
-        const modal = document.getElementById('chatHistoryModal');
-        const custNameEl = document.getElementById('chatModalCustomerName');
-        const custPhoneEl = document.getElementById('chatModalCustomerPhone');
-        const avatarEl = document.getElementById('chatModalAvatar');
-        const container = document.getElementById('chatModalMessagesContainer');
+        // Remove active class from all items
+        document.querySelectorAll('.chat-customer-item').forEach(el => el.classList.remove('active'));
+        // Add active class to the selected item if it exists in the list
+        const listItem = document.querySelector(`.chat-customer-item[data-phone="${phone}"]`);
+        if (listItem) listItem.classList.add('active');
 
-        if (!modal || !container) return;
+        const custTitleEl = document.getElementById('chatViewerTitle');
+        const custPhoneEl = document.getElementById('chatViewerPhone');
+        const avatarEl = document.getElementById('chatViewerAvatar');
+        const container = document.getElementById('chatMessagesContainer2');
 
-        custNameEl.innerText = name || phone || 'Pelanggan';
-        custPhoneEl.innerText = phone || '-';
+        if (!container) return;
+
+        if (custTitleEl) custTitleEl.innerText = name || phone || 'Pelanggan';
+        if (custPhoneEl) custPhoneEl.innerText = phone || '-';
         if (avatarEl) {
+            avatarEl.style.display = 'flex';
             avatarEl.innerText = (name || phone || 'CS').substring(0, 2).toUpperCase();
         }
 
-        container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;"><i class="ph ph-circle-notch ph-spin" style="font-size: 24px;"></i><br>Memuat percakapan...</div>';
-        openModal('chatHistoryModal');
+        container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px; margin: auto;"><i class="ph ph-circle-notch ph-spin" style="font-size: 24px;"></i><br>Memuat percakapan...</div>';
+
+        // Switch to chat history tab if not already there
+        window.switchDashboardTab('chat-history');
 
         try {
             const { data: messages, error } = await window.supabaseClient
@@ -794,11 +800,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 .select('*')
                 .eq('user_id', window.currentUserId)
                 .eq('customer_phone', phone)
-                .order('id', { ascending: true })
-                .limit(40);
+                .order('created_at', { ascending: true }); // Make sure we get chronological order
 
             if (error || !messages || messages.length === 0) {
-                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">Belum ada riwayat pesan tersimpan.</div>';
+                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px; margin: auto;">Belum ada riwayat pesan tersimpan.</div>';
                 return;
             }
 
@@ -824,9 +829,85 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             container.scrollTop = container.scrollHeight;
         } catch (err) {
-            container.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 20px;">Gagal memuat pesan.</div>';
+            container.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 20px; margin: auto;">Gagal memuat pesan.</div>';
         }
     };
+
+    // Load Chat History Customers List
+    async function loadChatHistoryCustomers() {
+        if (!window.currentUserId) return;
+        const listContainer = document.getElementById('chatCustomerList');
+        if (!listContainer) return;
+        
+        try {
+            // Fetch all chats ordered by created_at desc to get the latest messages
+            const { data: allChats, error } = await window.supabaseClient
+                .from('chats')
+                .select('*')
+                .eq('user_id', window.currentUserId)
+                .order('created_at', { ascending: false });
+                
+            if (error) throw error;
+            
+            if (!allChats || allChats.length === 0) {
+                listContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">Belum ada pelanggan.</div>';
+                return;
+            }
+            
+            // Group by phone number
+            const customersMap = new Map();
+            allChats.forEach(chat => {
+                if (!chat.customer_phone) return;
+                if (!customersMap.has(chat.customer_phone)) {
+                    customersMap.set(chat.customer_phone, {
+                        phone: chat.customer_phone,
+                        name: chat.customer_name || 'Pelanggan',
+                        lastMessage: chat.message,
+                        time: chat.created_at
+                    });
+                }
+            });
+            
+            const customers = Array.from(customersMap.values());
+            
+            listContainer.innerHTML = '';
+            customers.forEach(cust => {
+                const time = cust.time ? new Date(cust.time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
+                const item = document.createElement('div');
+                item.className = 'chat-customer-item';
+                item.setAttribute('data-phone', cust.phone);
+                item.innerHTML = `
+                    <div class="chat-customer-info">
+                        <div class="chat-customer-name">${cust.name}</div>
+                        <div class="chat-customer-phone">${cust.phone}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;">${cust.lastMessage}</div>
+                    </div>
+                    <div style="font-size: 10px; color: var(--text-secondary); align-self: flex-start;">${time}</div>
+                `;
+                
+                item.addEventListener('click', () => {
+                    openChatDetail(cust.phone, cust.name);
+                });
+                listContainer.appendChild(item);
+            });
+            
+            // Handle Search
+            const searchInput = document.getElementById('chatSearchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    const q = e.target.value.toLowerCase();
+                    document.querySelectorAll('.chat-customer-item').forEach(el => {
+                        const text = el.innerText.toLowerCase();
+                        el.style.display = text.includes(q) ? 'flex' : 'none';
+                    });
+                });
+            }
+            
+        } catch (err) {
+            console.error('Failed to load customers:', err);
+            listContainer.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 20px;">Gagal memuat daftar pelanggan.</div>';
+        }
+    }
 
     // =============================================
     // 7. FETCH ALL DASHBOARD DATA
@@ -854,6 +935,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 .eq('user_id', user_id);
 
             if (statOrdersClosed) statOrdersClosed.innerText = (orderCount || 0).toLocaleString();
+
+            // AI Credits & Usage Tracking
+            await loadCreditsAndUsage(user_id);
+            
+            // Load Chat History Customers
+            await loadChatHistoryCustomers();
 
             // 2. Recent Chats on Overview
             const { data: recentChats, error: chatListErr } = await window.supabaseClient
@@ -975,6 +1062,95 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (window.renderFollowUps) window.renderFollowUps();
         } catch (err) {
             console.error('Failed to fetch data from Supabase:', err);
+        }
+    }
+
+    // =============================================
+    // 7. AI CREDITS & USAGE TRACKING
+    // =============================================
+    async function loadCreditsAndUsage(user_id) {
+        try {
+            // Ambil total pesan balasan AI dari tabel chats
+            const { count: aiReplyCount } = await window.supabaseClient
+                .from('chats')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', user_id)
+                .eq('sender', 'ai');
+
+            const usedCredits = aiReplyCount || 0;
+
+            // Ambil paket aktif dari metadata user atau localStorage
+            const userPlan = localStorage.getItem('user_plan') || 'Starter';
+            let totalQuota = 3000;
+            const planLower = userPlan.toLowerCase();
+            if (planLower === 'trial') totalQuota = 1000;
+            else if (planLower === 'starter') totalQuota = 3000;
+            else if (planLower === 'pro') totalQuota = 8000;
+            else if (planLower === 'business') totalQuota = 20000;
+            else if (planLower === 'agency') totalQuota = 50000;
+
+            const remainingCredits = Math.max(0, totalQuota - usedCredits);
+            const percentLeft = Math.min(100, Math.max(0, Math.round((remainingCredits / totalQuota) * 100)));
+
+            let progressColor = 'linear-gradient(90deg, #6366F1, #10B981)';
+            let badgeBg = '#D1FAE5';
+            let badgeColor = '#059669';
+            if (percentLeft < 20) {
+                progressColor = 'linear-gradient(90deg, #EF4444, #F87171)';
+                badgeBg = '#FEE2E2';
+                badgeColor = '#DC2626';
+            } else if (percentLeft < 50) {
+                progressColor = 'linear-gradient(90deg, #F59E0B, #FBBF24)';
+                badgeBg = '#FEF3C7';
+                badgeColor = '#D97706';
+            }
+
+            // 1. Update Overview Metric Card
+            const statRemaining = document.getElementById('statRemainingCredits');
+            const statPercentBadge = document.getElementById('statCreditPercentBadge');
+            const statPlanName = document.getElementById('statCreditPlanName');
+            const statProgressBar = document.getElementById('statCreditProgressBar');
+
+            if (statRemaining) statRemaining.innerText = remainingCredits.toLocaleString('id-ID');
+            if (statPlanName) statPlanName.innerText = userPlan;
+            if (statPercentBadge) {
+                statPercentBadge.innerText = `${percentLeft}%`;
+                statPercentBadge.style.color = badgeColor;
+                statPercentBadge.style.background = badgeBg;
+            }
+            if (statProgressBar) {
+                statProgressBar.style.width = `${percentLeft}%`;
+                statProgressBar.style.background = progressColor;
+            }
+
+            // 2. Update Billing Tab Widgets
+            const billingRemaining = document.getElementById('billingRemainingCredits');
+            const billingUsed = document.getElementById('billingUsedCredits');
+            const billingTotalInfo = document.getElementById('billingTotalQuotaInfo');
+            const billingPercentLabel = document.getElementById('billingPercentageLabel');
+            const billingProgressBar = document.getElementById('billingProgressBar');
+            const billingPlanBadge = document.getElementById('billingPlanBadge');
+            const currentPlanBadge = document.getElementById('currentPlanBadge');
+
+            if (billingRemaining) billingRemaining.innerText = remainingCredits.toLocaleString('id-ID');
+            if (billingUsed) billingUsed.innerText = usedCredits.toLocaleString('id-ID');
+            if (billingTotalInfo) billingTotalInfo.innerText = `dari kuota ${totalQuota.toLocaleString('id-ID')} kredit`;
+            if (billingPercentLabel) {
+                billingPercentLabel.innerText = `${percentLeft}% Tersisa (${remainingCredits.toLocaleString('id-ID')} Kredit)`;
+                billingPercentLabel.style.color = badgeColor;
+            }
+            if (billingProgressBar) {
+                billingProgressBar.style.width = `${percentLeft}%`;
+                billingProgressBar.style.background = progressColor;
+            }
+            if (billingPlanBadge) {
+                billingPlanBadge.innerHTML = `<i class="ph-fill ph-sparkle"></i> Paket ${userPlan}`;
+            }
+            if (currentPlanBadge) {
+                currentPlanBadge.innerHTML = `<i class="ph-fill ph-check-circle"></i> Current Plan: ${userPlan}`;
+            }
+        } catch (err) {
+            console.warn('⚠️ Gagal memuat data kuota kredit AI:', err.message);
         }
     }
 
