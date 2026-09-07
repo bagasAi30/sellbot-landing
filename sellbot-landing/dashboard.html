@@ -123,29 +123,74 @@
                 </div>
             </div>
 
-            <div class="dashboard-widgets">
-                <div class="widget full-width p-0">
+            <div class="dashboard-widgets" style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-top: 24px;">
+                <div class="widget">
                     <div class="widget-header">
-                        <h3>Riwayat Chat Terbaru</h3>
-                        <a href="#" class="view-all" id="btnViewInbox">Lihat Semua Chat <i class="ph ph-arrow-right"></i></a>
+                        <h3>Grafik Interaksi Pesan</h3>
+                        <select class="form-control" style="width: auto; padding: 4px 12px; font-size: 13px; border-radius: 6px;">
+                            <option>7 Hari Terakhir</option>
+                            <option>30 Hari Terakhir</option>
+                        </select>
                     </div>
-                    <div class="table-wrapper">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Pelanggan</th>
-                                    <th>Pesan Terakhir</th>
-                                    <th>Status</th>
-                                    <th>Waktu</th>
-                                    <th>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody id="overviewChatsTableBody">
-                                <tr>
-                                    <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 24px;">Memuat riwayat chat...</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div class="chart-container" style="height: 250px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding-top: 30px; margin-top: 10px; border-top: 1px dashed var(--border-color);">
+                        <!-- Placeholder for a bar chart -->
+                        <div style="width: 100%; height: 45%; background: linear-gradient(180deg, var(--primary) 0%, rgba(99, 102, 241, 0.1) 100%); border-radius: 6px 6px 0 0; position: relative; transition: height 0.3s ease; cursor: pointer;" title="145 Pesan"><span style="position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); font-size: 12px; color: var(--text-secondary); font-weight: 500;">Sen</span></div>
+                        <div style="width: 100%; height: 65%; background: linear-gradient(180deg, var(--primary) 0%, rgba(99, 102, 241, 0.1) 100%); border-radius: 6px 6px 0 0; position: relative; transition: height 0.3s ease; cursor: pointer;" title="210 Pesan"><span style="position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); font-size: 12px; color: var(--text-secondary); font-weight: 500;">Sel</span></div>
+                        <div style="width: 100%; height: 35%; background: linear-gradient(180deg, var(--primary) 0%, rgba(99, 102, 241, 0.1) 100%); border-radius: 6px 6px 0 0; position: relative; transition: height 0.3s ease; cursor: pointer;" title="112 Pesan"><span style="position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); font-size: 12px; color: var(--text-secondary); font-weight: 500;">Rab</span></div>
+                        <div style="width: 100%; height: 85%; background: linear-gradient(180deg, var(--primary) 0%, rgba(99, 102, 241, 0.1) 100%); border-radius: 6px 6px 0 0; position: relative; transition: height 0.3s ease; cursor: pointer;" title="275 Pesan"><span style="position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); font-size: 12px; color: var(--text-secondary); font-weight: 500;">Kam</span></div>
+                        <div style="width: 100%; height: 55%; background: linear-gradient(180deg, var(--primary) 0%, rgba(99, 102, 241, 0.1) 100%); border-radius: 6px 6px 0 0; position: relative; transition: height 0.3s ease; cursor: pointer;" title="178 Pesan"><span style="position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); font-size: 12px; color: var(--text-secondary); font-weight: 500;">Jum</span></div>
+                        <div style="width: 100%; height: 100%; background: linear-gradient(180deg, var(--primary) 0%, rgba(99, 102, 241, 0.1) 100%); border-radius: 6px 6px 0 0; position: relative; transition: height 0.3s ease; cursor: pointer; box-shadow: 0 -4px 12px rgba(99, 102, 241, 0.2);" title="320 Pesan"><span style="position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); font-size: 12px; color: var(--primary); font-weight: 700;">Sab</span></div>
+                        <div style="width: 100%; height: 75%; background: linear-gradient(180deg, var(--primary) 0%, rgba(99, 102, 241, 0.1) 100%); border-radius: 6px 6px 0 0; position: relative; transition: height 0.3s ease; cursor: pointer;" title="240 Pesan"><span style="position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); font-size: 12px; color: var(--text-secondary); font-weight: 500;">Min</span></div>
+                    </div>
+                </div>
+                
+                <div class="widget">
+                    <div class="widget-header" style="margin-bottom: 16px;">
+                        <h3>Performa AI</h3>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #F8FAFC; border-radius: 10px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(16, 185, 129, 0.12); color: #10B981; display: flex; align-items: center; justify-content: center;">
+                                    <i class="ph-fill ph-check-circle" style="font-size: 22px;"></i>
+                                </div>
+                                <div>
+                                    <h4 style="margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary);">Tuntas oleh AI</h4>
+                                    <span style="font-size: 12px; color: var(--text-secondary);">Berhasil dijawab bot</span>
+                                </div>
+                            </div>
+                            <div style="font-weight: 700; font-size: 16px; color: #10B981;">88%</div>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #F8FAFC; border-radius: 10px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(245, 158, 11, 0.12); color: #F59E0B; display: flex; align-items: center; justify-content: center;">
+                                    <i class="ph-fill ph-user-circle" style="font-size: 22px;"></i>
+                                </div>
+                                <div>
+                                    <h4 style="margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary);">Bantuan Admin</h4>
+                                    <span style="font-size: 12px; color: var(--text-secondary);">Dialihkan ke manusia</span>
+                                </div>
+                            </div>
+                            <div style="font-weight: 700; font-size: 16px; color: #F59E0B;">10%</div>
+                        </div>
+
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #F8FAFC; border-radius: 10px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(239, 68, 68, 0.12); color: #EF4444; display: flex; align-items: center; justify-content: center;">
+                                    <i class="ph-fill ph-warning-circle" style="font-size: 22px;"></i>
+                                </div>
+                                <div>
+                                    <h4 style="margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary);">Pesan Gagal</h4>
+                                    <span style="font-size: 12px; color: var(--text-secondary);">Error atau timeout</span>
+                                </div>
+                            </div>
+                            <div style="font-weight: 700; font-size: 16px; color: #EF4444;">2%</div>
+                        </div>
+                        
+                        <button class="btn btn-outline" style="width: 100%; margin-top: 8px; justify-content: center;">
+                            Lihat Detail Laporan
+                        </button>
                     </div>
                 </div>
             </div>

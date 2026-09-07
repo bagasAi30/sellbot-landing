@@ -942,40 +942,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Load Chat History Customers
             await loadChatHistoryCustomers();
 
-            // 2. Recent Chats on Overview
-            const { data: recentChats, error: chatListErr } = await window.supabaseClient
-                .from('chats')
-                .select('*')
-                .eq('user_id', user_id)
-                .order('id', { ascending: false })
-                .limit(8);
-
-            const overviewChatsTbody = document.getElementById('overviewChatsTableBody');
-            if (overviewChatsTbody) {
-                if (chatListErr || !recentChats || recentChats.length === 0) {
-                    overviewChatsTbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 24px;">Belum ada riwayat chat terbaru.</td></tr>';
-                } else {
-                    chatsData = recentChats;
-                    overviewChatsTbody.innerHTML = '';
-                    recentChats.forEach(chat => {
-                        const tr = document.createElement('tr');
-                        const time = chat.created_at ? new Date(chat.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : 'Baru saja';
-                        const snippet = chat.message.length > 40 ? chat.message.substring(0, 40) + '...' : chat.message;
-                        const nameOrPhone = chat.customer_name || chat.customer_phone || 'Pelanggan';
-
-                        tr.innerHTML = `
-                            <td><strong>${nameOrPhone}</strong><br><span style="font-size: 11px; color: var(--text-secondary);">${chat.customer_phone}</span></td>
-                            <td style="color: var(--text-primary); font-size: 13px;">${snippet}</td>
-                            <td><span class="status-badge success" style="font-size: 11px;"><i class="ph-fill ph-lightning"></i> Auto Reply</span></td>
-                            <td style="font-size: 12px; color: var(--text-secondary);">${time}</td>
-                            <td>
-                                <button class="btn btn-outline btn-small" onclick="openChatDetail('${chat.customer_phone}', '${nameOrPhone}')">Lihat Chat</button>
-                            </td>
-                        `;
-                        overviewChatsTbody.appendChild(tr);
-                    });
-                }
-            }
 
             // 4. Products Table
             const { data: products, error: prodError } = await window.supabaseClient

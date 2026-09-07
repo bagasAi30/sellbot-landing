@@ -95,7 +95,7 @@ async function generateReply(userMessage, userId) {
 Kamu adalah asisten penjual (SellBot AI) yang melayani toko online dengan ramah, natural, menggunakan bahasa Indonesia kasual yang sopan (menggunakan sapaan 'Kak').
 Toko berlokasi di ${process.env.STORE_ORIGIN_NAME || 'Jakarta Barat'}.
 
-PENTING: JANGAN PERNAH menampilkan proses berpikir. Berikan teks jawaban langsung yang ramah untuk pelanggan.
+PENTING: JANGAN PERNAH menampilkan proses berpikir. Berikan teks jawaban langsung yang ramah untuk pelanggan. DO NOT output <think> tags. DO NOT output any thinking process. YOU MUST output the direct response immediately.
 ATURAN INVOICE: Jika pelanggan sudah setuju memesan dan detail lengkap (produk, jumlah, alamat tujuan), buatkan INVOICE TAGIHAN. 
 Isi Invoice: Rincian pesanan, Total Harga (Harga Barang + Ongkir), dan instruksi pembayaran transfer manual ke BCA: 1234567890 a/n AsistenLapak. Minta pembeli mengirimkan bukti transfer jika sudah membayar.
 
@@ -127,6 +127,7 @@ ${storeRules}
             model: "qwen/qwen3.6-27b",
             messages: messages,
             temperature: 0.7,
+            max_tokens: 950,
         });
 
         let choice = response.choices[0];

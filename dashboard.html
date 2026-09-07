@@ -125,27 +125,11 @@
 
             <div class="dashboard-widgets">
                 <div class="widget full-width p-0">
-                    <div class="widget-header">
-                        <h3>Riwayat Chat Terbaru</h3>
-                        <a href="#" class="view-all" id="btnViewInbox">Lihat Semua Chat <i class="ph ph-arrow-right"></i></a>
+                    <div class="widget-header" style="padding: 24px 24px 0 24px; border-bottom: none;">
+                        <h3>Analitik Penggunaan Kredit</h3>
                     </div>
-                    <div class="table-wrapper">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Pelanggan</th>
-                                    <th>Pesan Terakhir</th>
-                                    <th>Status</th>
-                                    <th>Waktu</th>
-                                    <th>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody id="overviewChatsTableBody">
-                                <tr>
-                                    <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 24px;">Memuat riwayat chat...</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div class="chart-container" style="padding: 24px; height: 350px; width: 100%;">
+                        <canvas id="creditUsageChart"></canvas>
                     </div>
                 </div>
             </div>
@@ -864,6 +848,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-client.js"></script>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="dashboard.js"></script>
 </body>
 
