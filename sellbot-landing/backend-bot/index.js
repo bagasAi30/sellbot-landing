@@ -316,15 +316,35 @@ async function startWhatsAppBot(userId, onStatus) {
 
     // Mendengarkan pesan masuk
     sock.ev.on('messages.upsert', async (m) => {
+        if (m.type !== 'notify') return; // Abaikan sinkronisasi history (append)
+
         const msg = m.messages[0];
         if (!msg.message || msg.key.fromMe) return; // Abaikan pesan sendiri atau status
+
+        // Unwrap pesan dari ephemeral, viewOnce, dll.
+        let msgContent = msg.message;
+        if (msgContent.ephemeralMessage) {
+            msgContent = msgContent.ephemeralMessage.message;
+        }
+        if (msgContent.viewOnceMessage) {
+            msgContent = msgContent.viewOnceMessage.message;
+        }
+        if (msgContent.viewOnceMessageV2) {
+            msgContent = msgContent.viewOnceMessageV2.message;
+        }
+        if (msgContent.viewOnceMessageV2Extension) {
+            msgContent = msgContent.viewOnceMessageV2Extension.message;
+        }
+        if (msgContent.documentWithCaptionMessage) {
+            msgContent = msgContent.documentWithCaptionMessage.message;
+        }
 
         const senderJid = msg.key.remoteJid;
         const rawSenderNum = senderJid.split('@')[0].split(':')[0];
         const customerPhone = await resolveCustomerPhoneNumber(msg, sock, userId);
         const customerName = msg.pushName || customerPhone;
-        const imageMessage = msg.message.imageMessage || msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
-        const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text || msg.message.imageMessage?.caption || "";
+        const imageMessage = msgContent.imageMessage || msgContent.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
+        const textMessage = msgContent.conversation || msgContent.extendedTextMessage?.text || msgContent.imageMessage?.caption || "";
 
         if (!textMessage && !imageMessage) return; // Hanya memproses pesan teks atau gambar
 
