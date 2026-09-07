@@ -123,6 +123,16 @@
                 </div>
             </div>
 
+            <div class="dashboard-widgets">
+                <div class="widget full-width p-0">
+                    <div class="widget-header" style="padding: 24px 24px 0 24px; border-bottom: none;">
+                        <h3>Analitik Penggunaan Kredit</h3>
+                    </div>
+                    <div class="chart-container" style="padding: 24px; height: 350px; width: 100%;">
+                        <canvas id="creditUsageChart"></canvas>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- Chat History Section -->
@@ -838,6 +848,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-client.js"></script>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="dashboard.js"></script>
 </body>
 

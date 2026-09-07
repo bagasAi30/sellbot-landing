@@ -30,12 +30,58 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    // Handle "Lihat Semua Chat" link from overview
-    const viewInboxLink = document.getElementById('btnViewInbox');
-    if (viewInboxLink) {
-        viewInboxLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            window.switchDashboardTab('chat-history');
+    // --- Credit Usage Chart ---
+    const creditCtx = document.getElementById('creditUsageChart');
+    if (creditCtx) {
+        new Chart(creditCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'],
+                datasets: [{
+                    label: 'Penggunaan Kredit',
+                    data: [120, 190, 300, 250, 400, 350, 500],
+                    backgroundColor: 'rgba(99, 102, 241, 0.8)',
+                    borderColor: 'rgba(99, 102, 241, 1)',
+                    borderWidth: 1,
+                    borderRadius: 6,
+                    barPercentage: 0.6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)',
+                            drawBorder: false
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false,
+                            drawBorder: false
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: '#1E293B',
+                        padding: 12,
+                        titleFont: { family: "'Inter', sans-serif", size: 13 },
+                        bodyFont: { family: "'Inter', sans-serif", size: 14, weight: 'bold' },
+                        callbacks: {
+                            label: function(context) {
+                                return context.parsed.y + ' Kredit';
+                            }
+                        }
+                    }
+                }
+            }
         });
     }
 
