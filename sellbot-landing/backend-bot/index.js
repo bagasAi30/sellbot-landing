@@ -11,7 +11,7 @@ if (typeof WebSocket === 'undefined') {
 
 const express = require('express');
 const cors = require('cors');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage, extractMessageContent } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const { createClient } = require('@supabase/supabase-js');
 const { generateAIResponse, processImageWithGemini, extractIntentWithGemini, extractOrderDetails, cleanAndValidateLocation } = require('./ai');
@@ -318,37 +318,27 @@ async function startWhatsAppBot(userId, onStatus) {
     sock.ev.on('messages.upsert', async (m) => {
         if (m.type !== 'notify') return; // Abaikan sinkronisasi history (append)
 
-        const msg = m.messages[0];
-        if (!msg.message || msg.key.fromMe) return; // Abaikan pesan sendiri atau status
+        for (const msg of m.messages) {
+            if (!msg.message || msg.key.fromMe) continue; // Abaikan pesan sendiri atau status
 
-        // Unwrap pesan dari ephemeral, viewOnce, dll.
-        let msgContent = msg.message;
-        if (msgContent.ephemeralMessage) {
-            msgContent = msgContent.ephemeralMessage.message;
-        }
-        if (msgContent.viewOnceMessage) {
-            msgContent = msgContent.viewOnceMessage.message;
-        }
-        if (msgContent.viewOnceMessageV2) {
-            msgContent = msgContent.viewOnceMessageV2.message;
-        }
-        if (msgContent.viewOnceMessageV2Extension) {
-            msgContent = msgContent.viewOnceMessageV2Extension.message;
-        }
-        if (msgContent.documentWithCaptionMessage) {
-            msgContent = msgContent.documentWithCaptionMessage.message;
-        }
+            // Unwrap pesan dengan aman menggunakan helper bawaan Baileys
+            const msgContent = extractMessageContent(msg.message);
+            if (!msgContent) continue;
 
-        const senderJid = msg.key.remoteJid;
-        const rawSenderNum = senderJid.split('@')[0].split(':')[0];
-        const customerPhone = await resolveCustomerPhoneNumber(msg, sock, userId);
-        const customerName = msg.pushName || customerPhone;
-        const imageMessage = msgContent.imageMessage || msgContent.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
-        const textMessage = msgContent.conversation || msgContent.extendedTextMessage?.text || msgContent.imageMessage?.caption || "";
+            const senderJid = msg.key.remoteJid;
+            const rawSenderNum = senderJid.split('@')[0].split(':')[0];
+            const customerPhone = await resolveCustomerPhoneNumber(msg, sock, userId);
+            const customerName = msg.pushName || customerPhone;
+            
+            const imageMessage = msgContent.imageMessage || msgContent.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
+            const textMessage = msgContent.conversation || msgContent.extendedTextMessage?.text || msgContent.imageMessage?.caption || "";
 
-        if (!textMessage && !imageMessage) return; // Hanya memproses pesan teks atau gambar
+            if (!textMessage && !imageMessage) {
+                console.log(`⚠️ Pesan dari ${customerPhone} diabaikan (bukan teks/gambar). Tipe:`, Object.keys(msgContent));
+                continue; // Hanya memproses pesan teks atau gambar
+            }
 
-        // Cek Knowledge Base untuk Aturan, Prompt, Blocked Numbers, dan Special Numbers
+            // Cek Knowledge Base untuk Aturan, Prompt, Blocked Numbers, dan Special Numbers
         let kb = null;
         try {
             const { data } = await supabase
@@ -1238,6 +1228,7 @@ async function startWhatsAppBot(userId, onStatus) {
         } catch (err) {
             console.error("Gagal memproses pesan:", err);
         }
+        } // End of for loop
     });
 }
 // ==========================================
