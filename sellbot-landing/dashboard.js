@@ -736,32 +736,74 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =============================================
     // 5. BILLING & PAYMENT
     // =============================================
-    window.processPayment = function () {
-        const selected = document.querySelector('input[name="paymentMethod"]:checked');
-        if (selected) {
-            let method = selected.value.toUpperCase();
-            if (method === 'QRIS') method = 'QRIS Instan';
-            else method += ' Virtual Account';
+    let selectedPlan = 'Pro'; // Default fallback
 
-            const btn = document.querySelector('#checkoutModal .btn-primary');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Memproses Pembayaran...';
-            btn.disabled = true;
+    window.selectPlan = function(planName) {
+        selectedPlan = planName;
+        openModal('checkoutModal');
+    };
 
-            setTimeout(() => {
-                showToast(`Pembayaran berhasil via ${method}! Paket Anda aktif.`, 'success');
+    window.processPayment = async function () {
+        const btn = document.querySelector('#checkoutModal .btn-primary');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Memproses...';
+        btn.disabled = true;
+
+        try {
+            // Get user info from Supabase session
+            const { data: sessionData } = await window.supabaseClient.auth.getSession();
+            const user = sessionData?.session?.user;
+            
+            if (!user) {
+                showToast('Anda harus login terlebih dahulu.', 'error');
+                return;
+            }
+
+            // Call Backend API to create Midtrans transaction
+            const response = await fetch('http://localhost:3000/api/payment/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    plan: selectedPlan,
+                    userId: user.id,
+                    email: user.email,
+                    name: localStorage.getItem('storeName') || 'User',
+                    phone: user.user_metadata?.phone || ''
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success && result.token) {
+                // Close checkout modal
                 closeModal('checkoutModal');
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-
-                const badge = document.querySelector('#billing .status-badge');
-                if (badge) {
-                    badge.innerHTML = '<i class="ph-fill ph-check-circle"></i> Current Plan: Pro (Active)';
-                    badge.className = 'status-badge success';
-                    badge.style.background = 'rgba(16, 185, 129, 0.2)';
-                    badge.style.color = 'var(--success)';
-                }
-            }, 1200);
+                
+                // Open Midtrans Snap Popup
+                window.snap.pay(result.token, {
+                    onSuccess: function(result){
+                        showToast('Pembayaran berhasil! Kredit Anda akan segera ditambahkan.', 'success');
+                        // Backend webhook will handle Supabase update. User can refresh.
+                        setTimeout(() => window.location.reload(), 2000);
+                    },
+                    onPending: function(result){
+                        showToast('Menunggu pembayaran Anda.', 'warning');
+                    },
+                    onError: function(result){
+                        showToast('Pembayaran gagal.', 'error');
+                    },
+                    onClose: function(){
+                        showToast('Anda menutup popup tanpa menyelesaikan pembayaran.', 'warning');
+                    }
+                });
+            } else {
+                showToast(result.message || 'Gagal membuat transaksi', 'error');
+            }
+        } catch (error) {
+            console.error('Payment Error:', error);
+            showToast('Terjadi kesalahan pada sistem pembayaran.', 'error');
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
         }
     };
 

@@ -12,9 +12,11 @@ app.use(express.json());
 // Routes
 const webhookRoutes = require('./routes/webhook');
 const apiRoutes = require('./routes/api');
+const paymentRoutes = require('./routes/payment');
 const { connectToWhatsApp } = require('./services/baileys.service');
 
 app.use('/webhook', webhookRoutes);
+app.use('/api/payment', paymentRoutes);
 app.use('/api', apiRoutes);
 
 const path = require('path');

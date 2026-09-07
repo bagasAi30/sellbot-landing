@@ -13,11 +13,13 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@supabase/supabase-js": "^2.115.0",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "axios": "^1.19.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "midtrans-client": "^1.4.3",
     "multer": "^2.2.0",
     "openai": "^7.5.0",
     "pino": "^10.3.1",

@@ -549,7 +549,7 @@
                         <p style="color: var(--text-secondary); font-size: 13px; margin: 0;">Kredit AI terpakai 1 poin setiap kali bot membalas pesan pelanggan secara otomatis.</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button class="btn btn-primary" onclick="openModal('checkoutModal')">
+                        <button class="btn btn-primary" onclick="selectPlan('Starter')">
                             <i class="ph ph-plus-circle"></i> Top Up / Upgrade Paket
                         </button>
                     </div>
@@ -600,7 +600,7 @@
                         <li><i class="ph-fill ph-check-circle"></i> Blacklist</li>
                         <li><i class="ph-fill ph-check-circle"></i> 1 nomor WhatsApp</li>
                     </ul>
-                    <button class="btn btn-outline full-width" style="margin-top:20px;" onclick="openModal('checkoutModal')">Pilih Paket</button>
+                    <button class="btn btn-outline full-width" style="margin-top:20px;" onclick="selectPlan('Starter')">Pilih Paket</button>
                 </div>
 
                 <!-- Pro -->
@@ -618,7 +618,7 @@
                         <li><i class="ph-fill ph-check-circle"></i> Follow-up lanjutan</li>
                         <li><i class="ph-fill ph-check-circle"></i> 2 nomor WhatsApp</li>
                     </ul>
-                    <button class="btn btn-primary full-width" style="margin-top:20px;" onclick="openModal('checkoutModal')">Pilih Paket</button>
+                    <button class="btn btn-primary full-width" style="margin-top:20px;" onclick="selectPlan('Basic')">Pilih Paket</button>
                 </div>
 
                 <!-- Business -->
@@ -635,7 +635,7 @@
                         <li><i class="ph-fill ph-check-circle"></i> Laporan lebih lengkap</li>
                         <li><i class="ph-fill ph-check-circle"></i> 5 nomor WhatsApp</li>
                     </ul>
-                    <button class="btn btn-outline full-width" style="margin-top:20px;" onclick="openModal('checkoutModal')">Pilih Paket</button>
+                    <button class="btn btn-outline full-width" style="margin-top:20px;" onclick="selectPlan('Pro')">Pilih Paket</button>
                 </div>
 
                 <!-- Agency -->
@@ -651,7 +651,7 @@
                         <li><i class="ph-fill ph-check-circle"></i> Priority support</li>
                         <li><i class="ph-fill ph-check-circle"></i> Fitur agency</li>
                     </ul>
-                    <button class="btn btn-outline full-width" style="margin-top:20px;" onclick="openModal('checkoutModal')">Pilih Paket</button>
+                    <button class="btn btn-outline full-width" style="margin-top:20px;" onclick="selectPlan('Enterprise')">Pilih Paket</button>
                 </div>
             </div>
         </section>
@@ -750,7 +750,7 @@
                 Silakan pilih paket langganan untuk terus menikmati asisten AI toko online Anda 24/7.
             </p>
             <button class="btn btn-primary full-width"
-                onclick="closeModal('trialExpiredModal'); openModal('checkoutModal');">
+                onclick="closeModal('trialExpiredModal'); selectPlan('Basic');">
                 Tingkatkan Paket Sekarang
             </button>
         </div>
@@ -840,6 +840,7 @@
     <script src="supabase-client.js"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="SB-Mid-client-xxxxxxxxxxxxxxxxx"></script>
     <script src="dashboard.js"></script>
 </body>
 
