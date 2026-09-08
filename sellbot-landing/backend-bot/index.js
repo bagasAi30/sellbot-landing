@@ -1465,6 +1465,27 @@ async function startWhatsAppBot(userId, onStatus) {
             res.status(200).send('OK');
         });
 
+        // Diagnostic endpoint: test AI reply langsung dari browser
+        app.get('/api/test-ai', async (req, res) => {
+            const msg = req.query.msg || 'Halo kak jualan apa aja?';
+            try {
+                const { generateAIResponse } = require('./ai');
+                const reply = await generateAIResponse(msg, 'Layani pelanggan dengan ramah', [], []);
+                res.json({ ok: true, message: msg, reply });
+            } catch (err) {
+                res.status(500).json({ ok: false, error: err.message });
+            }
+        });
+
+        // Diagnostic endpoint: status semua sesi bot
+        app.get('/api/debug-sessions', (req, res) => {
+            const sessions = {};
+            for (const [uid, s] of Object.entries(activeSessions)) {
+                sessions[uid] = { status: s.status, hasSocket: !!s.sock };
+            }
+            res.json({ sessions, time: new Date().toISOString() });
+        });
+
         // Auto-resume existing sessions
         try {
             const entries = fs.readdirSync(__dirname, { withFileTypes: true });
