@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, extractMessageContent } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const QRCode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
@@ -71,8 +71,11 @@ async function connectToWhatsApp() {
         sock.ev.on('creds.update', saveCreds);
 
         // Handle Pesan Masuk
+        // Set untuk mencegah duplikasi pemrosesan pesan
+        const processedMsgIds = new Set();
+
         sock.ev.on('messages.upsert', async ({ messages, type }) => {
-            if (type !== 'notify' || !isBotActive) return;
+            if (!isBotActive) return;
 
             // Ambil aturan nomor (Blocked & Special)
             const Knowledge = require('../models/Knowledge');
@@ -90,7 +93,23 @@ async function connectToWhatsApp() {
             const blockedArray = blockedNumbersStr.split(',').map(n => n.trim()).filter(Boolean);
             const specialArray = specialNumbersStr.split(',').map(n => n.trim()).filter(Boolean);
 
+            const now = Math.floor(Date.now() / 1000);
+
             for (const msg of messages) {
+                // [BEST PRACTICE 1] Timestamp check — abaikan pesan lama (history sync) > 60 detik
+                if (msg.messageTimestamp && (now - msg.messageTimestamp > 60)) {
+                    console.log(`[WA] Mengabaikan pesan lama (history sync) dari ${msg.key?.remoteJid}`);
+                    continue;
+                }
+
+                // [BEST PRACTICE 2] Deduplication — abaikan jika sudah diproses
+                const msgId = msg.key?.id;
+                if (msgId && processedMsgIds.has(msgId)) {
+                    console.log(`[WA] Mengabaikan pesan duplikat id: ${msgId}`);
+                    continue;
+                }
+                if (msgId) processedMsgIds.add(msgId);
+
                 if (!msg.message || msg.key.fromMe || msg.key.remoteJid.includes('@broadcast') || msg.key.remoteJid.includes('@g.us')) {
                     continue;
                 }
@@ -104,9 +123,13 @@ async function connectToWhatsApp() {
                     continue;
                 }
 
-                const messageContent = msg.message.conversation || 
-                                       msg.message.extendedTextMessage?.text || 
-                                       msg.message.imageMessage?.caption || '';
+                // [BEST PRACTICE 3] Gunakan extractMessageContent untuk unwrap nested messages
+                const msgContent = extractMessageContent(msg.message);
+                if (!msgContent) continue;
+
+                const messageContent = msgContent.conversation ||
+                                       msgContent.extendedTextMessage?.text ||
+                                       msgContent.imageMessage?.caption || '';
 
                 if (!messageContent) continue;
 
