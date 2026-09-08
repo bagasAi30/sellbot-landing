@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 // Polyfill WebSocket untuk Supabase di Node.js
 if (typeof WebSocket === 'undefined') {
@@ -1451,6 +1451,20 @@ async function startWhatsAppBot(userId, onStatus) {
         app.get('/health', (req, res) => {
             res.status(200).send('OK');
         });
+
+        // Auto-resume existing sessions
+        try {
+            const entries = fs.readdirSync(__dirname, { withFileTypes: true });
+            for (const entry of entries) {
+                if (entry.isDirectory() && entry.name.startsWith('auth_info_')) {
+                    const userId = entry.name.replace('auth_info_', '');
+                    console.log(`🔄 Auto-resuming bot for user: ${userId}`);
+                    startWhatsAppBot(userId).catch(err => console.error(`Gagal resume bot ${userId}:`, err));
+                }
+            }
+        } catch (err) {
+            console.error('Gagal membaca direktori untuk auto-resume:', err);
+        }
 
         // Menjalankan Server API (bind ke 0.0.0.0 agar bisa diakses di dalam Docker)
         const PORT = process.env.PORT || 3001;

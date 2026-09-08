@@ -124,10 +124,10 @@ ${storeRules}
         ];
 
         let response = await openai.chat.completions.create({
-            model: "qwen/qwen3.6-27b",
+            model: "openai/gpt-oss-20b",
             messages: messages,
             temperature: 0.7,
-            max_tokens: 950,
+            max_tokens: 800,
         });
 
         let choice = response.choices[0];
