@@ -2,11 +2,14 @@
 
 When writing or modifying a `@whiskeysockets/baileys` bot message handler, always apply these three invariants:
 
-1. **Type Check**: Always verify the message is a new notification, not a history sync.
+1. **History Sync Ignorance (Timestamp Check)**: Do NOT rely on `m.type === 'notify'` as some Baileys versions or multi-device syncs send `append` for new messages. Instead, use a timestamp check to ignore history syncs (messages older than 60 seconds).
    ```javascript
    sock.ev.on('messages.upsert', async (m) => {
-       if (m.type !== 'notify') return;
-       // ...
+       for (const msg of m.messages) {
+           const now = Math.floor(Date.now() / 1000);
+           if (msg.messageTimestamp && (now - msg.messageTimestamp > 60)) continue;
+           // ...
+       }
    });
    ```
 

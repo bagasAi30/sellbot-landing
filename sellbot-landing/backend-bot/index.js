@@ -316,14 +316,27 @@ async function startWhatsAppBot(userId, onStatus) {
 
     // Mendengarkan pesan masuk
     sock.ev.on('messages.upsert', async (m) => {
-        if (m.type !== 'notify') return; // Abaikan sinkronisasi history (append)
+        // Hapus pengecekan m.type !== 'notify' karena di beberapa versi Baileys tipe event bisa berbeda
+        console.log(`\n[DEBUG] Menerima event messages.upsert. Tipe: ${m.type}, Jumlah pesan: ${m.messages.length}`);
 
         for (const msg of m.messages) {
             if (!msg.message || msg.key.fromMe) continue; // Abaikan pesan sendiri atau status
 
+            // Cara paling aman menghindari History Sync (pesan lama yang di-download ulang)
+            // adalah dengan mengecek timestamp pesan. Abaikan jika pesan lebih tua dari 60 detik.
+            const msgTimestamp = msg.messageTimestamp;
+            const now = Math.floor(Date.now() / 1000);
+            if (msgTimestamp && (now - msgTimestamp > 60)) {
+                console.log(`[DEBUG] Pesan diabaikan karena timestamp kadaluarsa (History Sync). Delay: ${now - msgTimestamp}s`);
+                continue;
+            }
+
             // Unwrap pesan dengan aman menggunakan helper bawaan Baileys
             const msgContent = extractMessageContent(msg.message);
-            if (!msgContent) continue;
+            if (!msgContent) {
+                console.log(`[DEBUG] Pesan diabaikan karena msgContent kosong (tidak bisa di-unwrap).`);
+                continue;
+            }
 
             const senderJid = msg.key.remoteJid;
             const rawSenderNum = senderJid.split('@')[0].split(':')[0];
