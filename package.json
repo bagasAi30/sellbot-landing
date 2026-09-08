@@ -20,6 +20,20 @@
     "url": "https://github.com/bagasAi30/sellbot-landing/issues"
   },
   "homepage": "https://github.com/bagasAi30/sellbot-landing#readme",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.112.4",
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "axios": "^1.19.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "groq-sdk": "^1.5.0",
+    "pino": "^10.3.1",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
+    "ws": "^8.18.0"
+  },
   "devDependencies": {
     "live-server": "^1.2.2"
   }
