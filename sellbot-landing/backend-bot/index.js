@@ -335,10 +335,10 @@ async function startWhatsAppBot(userId, onStatus) {
             }
             if (msgId) processedMsgIds.add(msgId);
 
-            // [FIX 2] Timestamp check: abaikan pesan lama (history sync) > 30 detik
+            // [FIX 2] Timestamp check: abaikan pesan lama (history sync) > 120 detik (2 menit)
             const msgTimestamp = msg.messageTimestamp;
             const now = Math.floor(Date.now() / 1000);
-            if (msgTimestamp && (now - msgTimestamp > 30)) {
+            if (msgTimestamp && (now - msgTimestamp > 120)) {
                 console.log(`[DEBUG] Pesan diabaikan karena history sync. Delay: ${now - msgTimestamp}s dari ${msg.key?.remoteJid}`);
                 continue;
             }
@@ -377,33 +377,24 @@ async function startWhatsAppBot(userId, onStatus) {
             console.warn('⚠️ Gagal ambil knowledge_base:', err.message);
         }
 
-        // Cek apakah nomor diblokir atau merupakan nomor khusus/admin
-        if (kb && (kb.blocked_numbers || kb.special_numbers || kb.admin_numbers)) {
-            let ignoreList = [];
-            if (kb.blocked_numbers) {
-                ignoreList = ignoreList.concat(kb.blocked_numbers.split(/[\n,]+/).map(n => n.trim()).filter(Boolean));
-            }
-            if (kb.special_numbers) {
-                ignoreList = ignoreList.concat(kb.special_numbers.split(/[\n,]+/).map(n => n.trim()).filter(Boolean));
-            }
-            if (kb.admin_numbers) {
-                ignoreList = ignoreList.concat(kb.admin_numbers.split(/[\n,]+/).map(n => n.trim()).filter(Boolean));
-            }
+        // Cek apakah nomor diblokir (Blacklist) - HANYA blocked_numbers, BUKAN special_numbers/admin_numbers
+        if (kb && kb.blocked_numbers) {
+            const blockList = kb.blocked_numbers.split(/[\n,]+/).map(n => n.trim()).filter(Boolean);
             
-            const isIgnored = ignoreList.some(ignoredNum => {
-                if (ignoredNum === customerPhone || ignoredNum === rawSenderNum) return true;
+            const isBlocked = blockList.some(blockedNum => {
+                if (blockedNum === customerPhone || blockedNum === rawSenderNum) return true;
                 // Jika UI menambahkan '62' di depan secara paksa, kita hapus 62 nya dan cocokkan
-                if (ignoredNum.replace(/^62/, '') === customerPhone || ignoredNum.replace(/^62/, '') === rawSenderNum) return true;
+                if (blockedNum.replace(/^62/, '') === customerPhone || blockedNum.replace(/^62/, '') === rawSenderNum) return true;
                 // Atau jika customerPhone yang ada 62 nya tapi di database nggak ada
-                if (customerPhone.replace(/^62/, '') === ignoredNum.replace(/^62/, '')) return true;
+                if (customerPhone.replace(/^62/, '') === blockedNum.replace(/^62/, '')) return true;
                 // Atau jika format di database pakai '0' di depan
-                if (ignoredNum.replace(/^0/, '62') === customerPhone || ignoredNum.replace(/^0/, '62') === rawSenderNum) return true;
+                if (blockedNum.replace(/^0/, '62') === customerPhone || blockedNum.replace(/^0/, '62') === rawSenderNum) return true;
                 return false;
             });
 
-            if (isIgnored) {
-                console.log(`🚫 Pesan dari ${customerPhone} diabaikan (masuk daftar blokir atau nomor khusus)`);
-                continue; // [FIX 3] was: return — seharusnya continue agar pesan lain di loop tetap diproses
+            if (isBlocked) {
+                console.log(`🚫 Pesan dari ${customerPhone} diabaikan (nomor ada di daftar blokir/blacklist)`);
+                continue;
             }
         }
 
