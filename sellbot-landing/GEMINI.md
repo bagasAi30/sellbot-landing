@@ -29,3 +29,17 @@ When writing or modifying a `@whiskeysockets/baileys` bot message handler, alway
        if (!msgContent) continue;
        const textMessage = msgContent.conversation || msgContent.extendedTextMessage?.text || "";
    ```
+
+4. **Standard Browser Signature for Pairing Stability**: Always use standard `Browsers.ubuntu('Chrome')` imported from `@whiskeysockets/baileys` instead of custom browser strings. Custom browser names trigger WhatsApp's anti-bot detection during QR pairing and result in "Gagal menautkan perangkat".
+   ```javascript
+       const { Browsers } = require('@whiskeysockets/baileys');
+
+       const sock = makeWASocket({
+           auth: state,
+           printQRInTerminal: false,
+           browser: Browsers.ubuntu('Chrome')
+       });
+   ```
+
+5. **Multi-Device Client API Calls**: Never hardcode `http://localhost:PORT` in frontend JavaScript files. Always use relative paths (`/api/...`) so that deployed applications function seamlessly across different networks and mobile devices.
+

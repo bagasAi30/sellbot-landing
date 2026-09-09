@@ -760,7 +760,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // Call Backend API to create Midtrans transaction
-            const response = await fetch('http://localhost:3000/api/payment/create', {
+            const response = await fetch('/api/payment/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

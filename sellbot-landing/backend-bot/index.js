@@ -11,7 +11,7 @@ if (typeof WebSocket === 'undefined') {
 
 const express = require('express');
 const cors = require('cors');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage, extractMessageContent } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage, extractMessageContent, Browsers } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const { createClient } = require('@supabase/supabase-js');
 const { generateAIResponse, processImageWithGemini, extractIntentWithGemini, extractOrderDetails, cleanAndValidateLocation } = require('./ai');
@@ -31,10 +31,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Melayani file-file statis Frontend (cek ./public dulu, lalu .. atau ../..)
-let frontendPath = path.join(__dirname, 'public');
+// Melayani file-file statis Frontend (utamakan folder sellbot-landing / parent)
+let frontendPath = path.join(__dirname, '..');
 if (!fs.existsSync(path.join(frontendPath, 'index.html'))) {
-    frontendPath = path.join(__dirname, '..');
+    frontendPath = path.join(__dirname, 'public');
 }
 if (!fs.existsSync(path.join(frontendPath, 'index.html'))) {
     frontendPath = path.join(__dirname, '../..');
@@ -276,7 +276,7 @@ async function startWhatsAppBot(userId, onStatus) {
     const sock = makeWASocket({
         auth: state,
         printQRInTerminal: true,
-        browser: ['AsistenLapak AI', 'Chrome', '1.0.0']
+        browser: Browsers.ubuntu('Chrome')
     });
 
     activeSessions[userId] = { sock: sock, status: 'CONNECTING', qr: null, customers: {} };
