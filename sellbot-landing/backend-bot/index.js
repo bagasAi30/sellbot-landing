@@ -41,6 +41,10 @@ if (!fs.existsSync(path.join(frontendPath, 'index.html'))) {
 }
 app.use(express.static(frontendPath));
 
+// Rute Pembayaran Midtrans Snap & Webhook
+const paymentRoutes = require('./routes/payment');
+app.use('/api/payment', paymentRoutes);
+
 // Route ramah pengguna (bisa akses tanpa akhiran .html)
 app.get('/', (req, res) => {
     res.sendFile(path.join(frontendPath, 'index.html'));
@@ -1264,13 +1268,21 @@ async function startWhatsAppBot(userId, onStatus) {
                 customer_name: customerName,
                 message: aiReply,
                 sender: 'ai',
-                status: 'handled_by_ai'
+                status: isForwardToAdmin ? 'escalated_to_admin' : 'handled_by_ai'
             }]).then(({error}) => {
                 if (error) console.warn('⚠️ Gagal simpan balasan AI ke Supabase:', error.message);
             });
 
         } catch (err) {
             console.error("Gagal memproses pesan:", err);
+            supabase.from('chats').insert([{
+                user_id: userId,
+                customer_phone: customerPhone,
+                customer_name: customerName,
+                message: `[Error: ${err.message}]`,
+                sender: 'ai',
+                status: 'failed'
+            }]).then();
         }
         } // End of for loop
     });

@@ -811,27 +811,55 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const result = await response.json();
 
+            // Pastikan Midtrans Snap SDK ter-load
+            if (typeof window.snap === 'undefined') {
+                try {
+                    const cfgRes = await fetch('/api/payment/config');
+                    const cfg = await cfgRes.json();
+                    if (cfg && cfg.clientKey) {
+                        await new Promise((resolve) => {
+                            const script = document.createElement('script');
+                            script.src = cfg.isProduction
+                                ? 'https://app.midtrans.com/snap/snap.js'
+                                : 'https://app.sandbox.midtrans.com/snap/snap.js';
+                            script.setAttribute('data-client-key', cfg.clientKey);
+                            script.onload = () => resolve(true);
+                            script.onerror = () => resolve(false);
+                            document.head.appendChild(script);
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Gagal memuat snap.js otomatis:', e);
+                }
+            }
+
             if (result.success && result.token) {
                 // Close checkout modal
                 closeModal('checkoutModal');
                 
-                // Open Midtrans Snap Popup
-                window.snap.pay(result.token, {
-                    onSuccess: function(result){
-                        showToast('Pembayaran berhasil! Kredit Anda akan segera ditambahkan.', 'success');
-                        // Backend webhook will handle Supabase update. User can refresh.
-                        setTimeout(() => window.location.reload(), 2000);
-                    },
-                    onPending: function(result){
-                        showToast('Menunggu pembayaran Anda.', 'warning');
-                    },
-                    onError: function(result){
-                        showToast('Pembayaran gagal.', 'error');
-                    },
-                    onClose: function(){
-                        showToast('Anda menutup popup tanpa menyelesaikan pembayaran.', 'warning');
-                    }
-                });
+                if (window.snap && typeof window.snap.pay === 'function') {
+                    // Open Midtrans Snap Popup
+                    window.snap.pay(result.token, {
+                        onSuccess: function(result){
+                            showToast('Pembayaran berhasil! Kredit Anda akan segera ditambahkan.', 'success');
+                            setTimeout(() => window.location.reload(), 2000);
+                        },
+                        onPending: function(result){
+                            showToast('Menunggu penyelesaian pembayaran Anda.', 'warning');
+                        },
+                        onError: function(result){
+                            showToast('Pembayaran gagal atau dibatalkan.', 'error');
+                        },
+                        onClose: function(){
+                            showToast('Anda menutup pembayaran sebelum selesai.', 'warning');
+                        }
+                    });
+                } else if (result.redirect_url) {
+                    // Fallback jika Snap Popup tidak terbuka di browser
+                    window.location.href = result.redirect_url;
+                } else {
+                    showToast('Snap Midtrans belum siap. Periksa konfigurasi kredensial.', 'error');
+                }
             } else {
                 showToast(result.message || 'Gagal membuat transaksi', 'error');
             }
@@ -1001,6 +1029,71 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // =============================================
+    // 6.5 RENDER GRAFIK INTERAKSI PESAN (RIIL DARI DATABASE)
+    // =============================================
+    window.renderInteractionChart = function (days = 7) {
+        const container = document.getElementById('chartContainer');
+        if (!container) return;
+
+        const chats = window.userChatsHistory || [];
+        const buckets = [];
+        const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+
+        for (let i = days - 1; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const dateKey = `${yyyy}-${mm}-${dd}`;
+            const label = days <= 7 ? dayNames[d.getDay()] : `${d.getDate()}/${d.getMonth() + 1}`;
+            const fullDate = d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
+
+            buckets.push({
+                dateKey,
+                label,
+                fullDate,
+                count: 0
+            });
+        }
+
+        // Agregasi pesan per hari dari tabel chats
+        chats.forEach(c => {
+            if (!c.created_at) return;
+            const cDate = c.created_at.split('T')[0];
+            const b = buckets.find(item => item.dateKey === cDate);
+            if (b) b.count++;
+        });
+
+        const maxCount = Math.max(...buckets.map(b => b.count), 1);
+
+        container.innerHTML = '';
+        buckets.forEach(b => {
+            const barWrapper = document.createElement('div');
+            barWrapper.style.cssText = 'flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: relative;';
+
+            // Hitung tinggi persen (minimal 6% agar bar selalu rapi dan terlihat)
+            const heightPercent = b.count === 0 ? 5 : Math.max(12, Math.round((b.count / maxCount) * 88));
+            const isHighest = b.count > 0 && b.count === maxCount;
+            const bgGradient = isHighest
+                ? 'linear-gradient(180deg, var(--primary) 0%, rgba(99, 102, 241, 0.4) 100%)'
+                : 'linear-gradient(180deg, rgba(99, 102, 241, 0.8) 0%, rgba(99, 102, 241, 0.15) 100%)';
+            const shadow = isHighest ? 'box-shadow: 0 -4px 12px rgba(99, 102, 241, 0.3);' : '';
+
+            barWrapper.innerHTML = `
+                <div style="width: 100%; max-width: 48px; height: ${heightPercent}%; background: ${bgGradient}; border-radius: 6px 6px 0 0; transition: all 0.3s ease; cursor: pointer; ${shadow}"
+                     title="${b.count} Pesan (${b.fullDate})">
+                </div>
+                <span style="margin-top: 8px; font-size: ${days > 7 ? '10px' : '12px'}; color: ${isHighest ? 'var(--primary)' : 'var(--text-secondary)'}; font-weight: ${isHighest ? '700' : '500'}; white-space: nowrap;">
+                    ${b.label}
+                </span>
+            `;
+
+            container.appendChild(barWrapper);
+        });
+    };
+
+    // =============================================
     // 7. FETCH ALL DASHBOARD DATA
     // =============================================
     async function fetchDashboardData() {
@@ -1009,23 +1102,79 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!session) return;
             const user_id = session.user.id;
 
-            // 1. Stats Metrics
+            // 1. Stats Metrics Element
             const statTotalChats = document.getElementById('statTotalChats');
+            const statAutoReply = document.getElementById('statAutoReply');
             const statOrdersClosed = document.getElementById('statOrdersClosed');
+            const perfAiRate = document.getElementById('perfAiRate');
+            const perfAdminRate = document.getElementById('perfAdminRate');
+            const perfFailedRate = document.getElementById('perfFailedRate');
 
-            const { count: chatCount } = await window.supabaseClient
+            // Ambil seluruh percakapan user untuk menghitung statistik riil
+            const { data: userChats, error: chatsError } = await window.supabaseClient
                 .from('chats')
-                .select('*', { count: 'exact', head: true })
+                .select('sender, status, message, created_at')
                 .eq('user_id', user_id);
 
-            if (statTotalChats) statTotalChats.innerText = (chatCount || 0).toLocaleString();
+            const allChats = userChats || [];
+            window.userChatsHistory = allChats;
 
-            const { count: orderCount } = await window.supabaseClient
-                .from('invoices')
-                .select('*', { count: 'exact', head: true })
-                .eq('user_id', user_id);
+            // A. Total Chat (Bulan Ini)
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const chatsThisMonth = allChats.filter(c => c.created_at && new Date(c.created_at) >= startOfMonth);
+            const displayChatCount = chatsThisMonth.length > 0 ? chatsThisMonth.length : allChats.length;
+            if (statTotalChats) statTotalChats.innerText = displayChatCount.toLocaleString('id-ID');
 
-            if (statOrdersClosed) statOrdersClosed.innerText = (orderCount || 0).toLocaleString();
+            // B. Auto-reply Rate Riil (Rasio balasan AI terhadap pesan pelanggan)
+            const totalCustMsgs = allChats.filter(c => c.sender === 'customer').length;
+            const totalAiReplies = allChats.filter(c => c.sender === 'ai').length;
+            let autoReplyPercent = 100;
+            if (totalCustMsgs > 0) {
+                autoReplyPercent = Math.min(100, Math.round((totalAiReplies / totalCustMsgs) * 100));
+            } else if (allChats.length === 0) {
+                autoReplyPercent = 100;
+            }
+            if (statAutoReply) statAutoReply.innerText = `${autoReplyPercent}%`;
+
+            // C. Performa AI Breakdown Riil
+            const totalAiHandled = allChats.filter(c => c.sender === 'ai' && (c.status === 'handled_by_ai' || c.status === 'sent' || !c.status)).length;
+            const totalAdminEscalated = allChats.filter(c => c.status === 'escalated_to_admin' || (c.message && c.message.includes('PANGGILAN ADMIN'))).length;
+            const totalFailed = allChats.filter(c => c.status === 'failed').length;
+            const totalEvents = totalAiHandled + totalAdminEscalated + totalFailed;
+
+            let pctAi = 100;
+            let pctAdmin = 0;
+            let pctFailed = 0;
+            if (totalEvents > 0) {
+                pctAi = Math.round((totalAiHandled / totalEvents) * 100);
+                pctAdmin = Math.round((totalAdminEscalated / totalEvents) * 100);
+                pctFailed = Math.max(0, 100 - pctAi - pctAdmin);
+            }
+            if (perfAiRate) perfAiRate.innerText = `${pctAi}%`;
+            if (perfAdminRate) perfAdminRate.innerText = `${pctAdmin}%`;
+            if (perfFailedRate) perfFailedRate.innerText = `${pctFailed}%`;
+
+            // D. Render Grafik Interaksi Pesan Riil
+            const rangeSelect = document.getElementById('chartTimeRange');
+            const selectedDays = rangeSelect ? parseInt(rangeSelect.value) || 7 : 7;
+            renderInteractionChart(selectedDays);
+
+            // E. Order Closed Riil dari tabel invoices
+            try {
+                const { count: orderCount, error: orderErr } = await window.supabaseClient
+                    .from('invoices')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('user_id', user_id);
+
+                if (!orderErr && statOrdersClosed) {
+                    statOrdersClosed.innerText = (orderCount || 0).toLocaleString('id-ID');
+                } else if (statOrdersClosed) {
+                    statOrdersClosed.innerText = '0';
+                }
+            } catch (invErr) {
+                if (statOrdersClosed) statOrdersClosed.innerText = '0';
+            }
 
             // AI Credits & Usage Tracking
             await loadCreditsAndUsage(user_id);
@@ -1135,6 +1284,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                 .eq('sender', 'ai');
 
             const usedCredits = aiReplyCount || 0;
+
+            // Ambil paket aktif dari invoice sukses terakhir di Supabase jika ada
+            try {
+                const { data: latestInvoice } = await window.supabaseClient
+                    .from('invoices')
+                    .select('plan_name, credits_added')
+                    .eq('user_id', user_id)
+                    .eq('status', 'success')
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (latestInvoice && latestInvoice.plan_name) {
+                    localStorage.setItem('user_plan', latestInvoice.plan_name);
+                }
+            } catch (invErr) {}
 
             // Ambil paket aktif dari metadata user atau localStorage
             const userPlan = localStorage.getItem('user_plan') || 'Starter';
