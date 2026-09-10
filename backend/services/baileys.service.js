@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, extractMessageContent } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, extractMessageContent, Browsers } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const QRCode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
@@ -6,9 +6,30 @@ const aiService = require('./ai.service');
 
 let sock = null;
 let qrCodeDataURL = null;
-let connectionStatus = 'DISCONNECTED'; // 'DISCONNECTED' | 'SCAN_QR' | 'CONNECTED' | 'CONNECTING'
+let pairingCode = null;
+let connectionStatus = 'DISCONNECTED'; // 'DISCONNECTED' | 'SCAN_QR' | 'WAITING_PAIRING_CODE' | 'CONNECTED' | 'CONNECTING'
 let isBotActive = true;
 let isStopping = false;
+
+async function waitForSocketOpen(s, timeoutMs = 15000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        if (s?.ws?.isOpen) return true;
+        await new Promise(r => setTimeout(r, 250));
+    }
+    return Boolean(s?.ws?.isOpen);
+}
+
+function sanitizePhoneNumber(phone) {
+    if (!phone) return null;
+    let clean = phone.toString().replace(/\D/g, '');
+    if (clean.startsWith('0')) {
+        clean = '62' + clean.slice(1);
+    } else if (!clean.startsWith('62') && clean.length >= 9 && clean.length <= 13) {
+        clean = '62' + clean;
+    }
+    return clean;
+}
 
 async function connectToWhatsApp() {
     isStopping = false;
@@ -21,7 +42,7 @@ async function connectToWhatsApp() {
             auth: state,
             printQRInTerminal: false,
             logger: pino({ level: 'silent' }),
-            browser: ['SellBot AI', 'Chrome', '1.0.0']
+            browser: Browsers.ubuntu('Chrome')
         });
 
         // Handle update koneksi (QR Code & Status Koneksi)
@@ -63,6 +84,7 @@ async function connectToWhatsApp() {
             } else if (connection === 'open') {
                 connectionStatus = 'CONNECTED';
                 qrCodeDataURL = null;
+                pairingCode = null;
                 console.log('\n✅ BERHASIL TERHUBUNG KE WHATSAPP!');
                 console.log('Bot AI siap merespons chat masuk secara otomatis.\n');
             }
@@ -190,6 +212,44 @@ async function resetWhatsApp() {
     }, 1500);
 }
 
+async function requestPairingCode(phoneNumber) {
+    const cleanNumber = sanitizePhoneNumber(phoneNumber);
+    if (!cleanNumber || cleanNumber.length < 10) {
+        throw new Error('Nomor telepon tidak valid. Gunakan format contoh: 081234567890');
+    }
+
+    if (!sock) {
+        await connectToWhatsApp();
+    }
+
+    if (connectionStatus === 'CONNECTED') {
+        return { status: 'CONNECTED', message: 'WhatsApp sudah terhubung' };
+    }
+
+    const isOpen = await waitForSocketOpen(sock, 12000);
+    if (!isOpen) {
+        throw new Error('Koneksi ke server WhatsApp belum siap. Silakan coba sesaat lagi.');
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const rawCode = await sock.requestPairingCode(cleanNumber);
+    let formattedCode = rawCode;
+    if (rawCode && rawCode.length === 8) {
+        formattedCode = `${rawCode.slice(0, 4)}-${rawCode.slice(4)}`;
+    }
+
+    pairingCode = formattedCode;
+    connectionStatus = 'WAITING_PAIRING_CODE';
+
+    return {
+        status: 'PAIRING_CODE',
+        pairingCode: formattedCode,
+        rawCode: rawCode,
+        phoneNumber: cleanNumber
+    };
+}
+
 function setBotActive(status) {
     isBotActive = status;
 }
@@ -198,6 +258,7 @@ function getStatus() {
     return {
         status: connectionStatus,
         qr: qrCodeDataURL,
+        pairingCode: pairingCode,
         isBotActive: isBotActive
     };
 }
@@ -206,6 +267,7 @@ module.exports = {
     connectToWhatsApp,
     stopWhatsApp,
     resetWhatsApp,
+    requestPairingCode,
     setBotActive,
     getStatus
 };

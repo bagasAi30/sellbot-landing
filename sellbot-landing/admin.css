@@ -153,3 +153,43 @@
     color: #F59E0B;
     border-color: #FEF3C7;
 }
+
+/* =========================================================
+   Admin Mobile Responsive Styles
+   ========================================================= */
+@media (max-width: 992px) {
+    .top-header {
+        height: auto;
+        padding: 14px 16px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .header-actions-right {
+        gap: 12px;
+    }
+
+    .main-wrapper .main-content {
+        padding: 16px 16px 80px;
+    }
+
+    .dashboard-grid-main {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .action-banner {
+        flex-direction: column;
+        text-align: center;
+        align-items: center;
+    }
+
+    .secondary-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .secondary-actions button {
+        width: 100%;
+    }
+}

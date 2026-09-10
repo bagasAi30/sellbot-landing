@@ -6,23 +6,60 @@ document.addEventListener('DOMContentLoaded', async () => {
     let invoicesData = [];
     let chatsData = [];
 
-    // --- Navigation Logic (Attach immediately) ---
+    // --- Navigation & Mobile Drawer Logic ---
     const navItems = document.querySelectorAll('.sidebar-nav .nav-item');
+    const bottomNavItems = document.querySelectorAll('.mobile-bottom-nav .mobile-nav-item');
     const sections = document.querySelectorAll('.dashboard-section');
+    const dashboardSidebar = document.getElementById('dashboardSidebar');
+    const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+    const btnMobileMenu = document.getElementById('btnMobileMenu');
+    const btnCloseSidebar = document.getElementById('btnCloseSidebar');
+
+    function closeMobileSidebar() {
+        if (dashboardSidebar) dashboardSidebar.classList.remove('open');
+        if (sidebarBackdrop) sidebarBackdrop.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    function openMobileSidebar() {
+        if (dashboardSidebar) dashboardSidebar.classList.add('open');
+        if (sidebarBackdrop) sidebarBackdrop.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    if (btnMobileMenu) btnMobileMenu.addEventListener('click', openMobileSidebar);
+    if (btnCloseSidebar) btnCloseSidebar.addEventListener('click', closeMobileSidebar);
+    if (sidebarBackdrop) sidebarBackdrop.addEventListener('click', closeMobileSidebar);
 
     window.switchDashboardTab = function(targetId) {
         navItems.forEach(nav => nav.classList.remove('active'));
+        bottomNavItems.forEach(bNav => bNav.classList.remove('active'));
+
         const targetNav = document.querySelector(`.sidebar-nav .nav-item[data-target="${targetId}"]`);
         if (targetNav) targetNav.classList.add('active');
+
+        const targetBottomNav = document.querySelector(`.mobile-bottom-nav .mobile-nav-item[data-target="${targetId}"]`);
+        if (targetBottomNav) targetBottomNav.classList.add('active');
+
         sections.forEach(section => section.classList.remove('active'));
         const targetSection = document.getElementById(targetId);
         if (targetSection) {
             targetSection.classList.add('active');
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
+
+        closeMobileSidebar();
     };
 
     navItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = item.getAttribute('data-target');
+            if (targetId) window.switchDashboardTab(targetId);
+        });
+    });
+
+    bottomNavItems.forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
             const targetId = item.getAttribute('data-target');
@@ -836,6 +873,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Switch to chat history tab if not already there
         window.switchDashboardTab('chat-history');
 
+        // Toggle mobile view to show chat pane
+        const chatLayoutWrapper = document.querySelector('.chat-layout-wrapper');
+        if (chatLayoutWrapper) chatLayoutWrapper.classList.add('mobile-show-chat');
+
         try {
             const { data: messages, error } = await window.supabaseClient
                 .from('chats')
@@ -948,6 +989,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (err) {
             console.error('Failed to load customers:', err);
             listContainer.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 20px;">Gagal memuat daftar pelanggan.</div>';
+        }
+
+        const btnChatBackToList = document.getElementById('btnChatBackToList');
+        if (btnChatBackToList) {
+            btnChatBackToList.addEventListener('click', () => {
+                const chatLayoutWrapper = document.querySelector('.chat-layout-wrapper');
+                if (chatLayoutWrapper) chatLayoutWrapper.classList.remove('mobile-show-chat');
+            });
         }
     }
 
@@ -1170,11 +1219,58 @@ document.addEventListener('DOMContentLoaded', async () => {
     const waBadge = document.getElementById('waConnectionBadge');
     const waConnectedState = document.getElementById('waConnectedState');
     const waDisconnectedState = document.getElementById('waDisconnectedState');
+    const waDisconnectedMsg = document.getElementById('waDisconnectedMsg');
+    const waQrLoading = document.getElementById('waQrLoading');
+    const waQrLoadingText = document.getElementById('waQrLoadingText');
+    const waQrImage = document.getElementById('waQrImage');
+    const waPairingBox = document.getElementById('waPairingBox');
+    const waPairingCodeText = document.getElementById('waPairingCodeText');
+    const btnCopyPairingCode = document.getElementById('btnCopyPairingCode');
+    const copyBtnText = document.getElementById('copyBtnText');
+
+    const tabMethodQR = document.getElementById('tabMethodQR');
+    const tabMethodPhone = document.getElementById('tabMethodPhone');
+    const guideQR = document.getElementById('guideQR');
+    const guidePhone = document.getElementById('guidePhone');
+    const waPhoneInputSection = document.getElementById('waPhoneInputSection');
+    const inputWaPairPhone = document.getElementById('inputWaPairPhone');
+    const btnGetPairingCode = document.getElementById('btnGetPairingCode');
+
     const btnRunBot = document.getElementById('btnRunBot');
     const btnStopBot = document.getElementById('btnStopBot');
     const btnRefreshQR = document.getElementById('btnRefreshQR');
     const toggleBotActive = document.getElementById('toggleBotActive');
     const botStatusMsg = document.getElementById('botStatusMessage');
+
+    let currentPairMethod = 'qr'; // 'qr' | 'phone'
+
+    function setPairingMethod(method) {
+        currentPairMethod = method;
+        if (method === 'qr') {
+            if (tabMethodQR) tabMethodQR.classList.add('active');
+            if (tabMethodPhone) tabMethodPhone.classList.remove('active');
+            if (guideQR) guideQR.style.display = 'block';
+            if (guidePhone) guidePhone.style.display = 'none';
+            if (btnRunBot) btnRunBot.style.display = 'inline-flex';
+            if (btnGetPairingCode) btnGetPairingCode.style.display = 'none';
+            if (waPhoneInputSection) waPhoneInputSection.style.display = 'none';
+            if (waPairingBox) waPairingBox.style.display = 'none';
+            if (waDisconnectedMsg) waDisconnectedMsg.innerText = 'Klik "Jalankan Bot (QR)" untuk generate QR';
+        } else {
+            if (tabMethodPhone) tabMethodPhone.classList.add('active');
+            if (tabMethodQR) tabMethodQR.classList.remove('active');
+            if (guidePhone) guidePhone.style.display = 'block';
+            if (guideQR) guideQR.style.display = 'none';
+            if (btnGetPairingCode) btnGetPairingCode.style.display = 'inline-flex';
+            if (btnRunBot) btnRunBot.style.display = 'none';
+            if (waPhoneInputSection) waPhoneInputSection.style.display = 'block';
+            if (waQrImage) waQrImage.style.display = 'none';
+            if (waDisconnectedMsg) waDisconnectedMsg.innerText = 'Masukkan nomor HP & klik "Dapatkan Kode Pairing"';
+        }
+    }
+
+    if (tabMethodQR) tabMethodQR.addEventListener('click', () => setPairingMethod('qr'));
+    if (tabMethodPhone) tabMethodPhone.addEventListener('click', () => setPairingMethod('phone'));
 
     async function checkBotStatus() {
         if (!window.currentUserId) return;
@@ -1205,41 +1301,67 @@ document.addEventListener('DOMContentLoaded', async () => {
             toggleBotActive.checked = data.isBotActive;
         }
 
-        const waQrImage = document.getElementById('waQrImage');
-
         if (data.status === 'CONNECTED') {
             setBadge('connected', 'WhatsApp Terhubung');
             if (waDisconnectedState) waDisconnectedState.style.display = 'none';
             if (waConnectedState) waConnectedState.style.display = 'flex';
             if (waQrImage) waQrImage.style.display = 'none';
+            if (waPairingBox) waPairingBox.style.display = 'none';
+            if (waQrLoading) waQrLoading.style.display = 'none';
             if (botStatusMsg) {
-                botStatusMsg.innerHTML = `<i class="ph-fill ph-check-circle" style="color:#22c55e;"></i><span>WhatsApp aktif terhubung — auto-reply siap bekerja!</span>`;
+                botStatusMsg.innerHTML = `<i class="ph-fill ph-check-circle" style="color:#22c55e;"></i><span>WhatsApp aktif terhubung — auto-reply siap melayani pelanggan!</span>`;
+            }
+        } else if (data.status === 'WAITING_PAIRING_CODE' || (data.pairingCode && data.status !== 'CONNECTED')) {
+            setBadge('disconnected', 'Menunggu Pairing di HP');
+            if (waDisconnectedState) waDisconnectedState.style.display = 'none';
+            if (waConnectedState) waConnectedState.style.display = 'none';
+            if (waQrImage) waQrImage.style.display = 'none';
+            if (waQrLoading) waQrLoading.style.display = 'none';
+            if (waPairingBox) {
+                waPairingBox.style.display = 'flex';
+                if (waPairingCodeText) waPairingCodeText.textContent = data.pairingCode;
+            }
+            if (botStatusMsg) {
+                botStatusMsg.innerHTML = `<i class="ph-fill ph-key"></i><span>Masukkan kode <strong>${data.pairingCode}</strong> di WhatsApp ponsel Anda.</span>`;
             }
         } else if ((data.status === 'SCAN_QR' || data.status === 'qr') && data.qr) {
             setBadge('disconnected', 'Menunggu Scan QR');
             if (waDisconnectedState) waDisconnectedState.style.display = 'none';
             if (waConnectedState) waConnectedState.style.display = 'none';
-            if (waQrImage) {
-                waQrImage.src = data.qr;
-                waQrImage.style.display = 'block';
-            }
-            if (botStatusMsg) {
-                botStatusMsg.innerHTML = `<i class="ph-fill ph-qr-code"></i><span>Silakan scan QR Code untuk menghubungkan WhatsApp.</span>`;
+            if (waQrLoading) waQrLoading.style.display = 'none';
+            if (currentPairMethod === 'qr') {
+                if (waPairingBox) waPairingBox.style.display = 'none';
+                if (waQrImage) {
+                    waQrImage.src = data.qr;
+                    waQrImage.style.display = 'block';
+                }
+                if (botStatusMsg) {
+                    botStatusMsg.innerHTML = `<i class="ph-fill ph-qr-code"></i><span>Silakan scan QR Code untuk menghubungkan WhatsApp.</span>`;
+                }
             }
         } else {
             setBadge('disconnected', 'Bot Nonaktif');
             if (waConnectedState) waConnectedState.style.display = 'none';
             if (waDisconnectedState) waDisconnectedState.style.display = 'flex';
             if (waQrImage) waQrImage.style.display = 'none';
+            if (waPairingBox) waPairingBox.style.display = 'none';
+            if (waQrLoading) waQrLoading.style.display = 'none';
             if (botStatusMsg) {
-                botStatusMsg.innerHTML = `<i class="ph ph-info"></i><span>Tekan <strong>Jalankan Bot</strong> untuk memulai sesi WhatsApp baru.</span>`;
+                botStatusMsg.innerHTML = `<i class="ph ph-info"></i><span>Pilih metode dan jalankan bot untuk mulai menghubungkan WhatsApp.</span>`;
             }
         }
     }
 
     if (btnRunBot) {
         btnRunBot.addEventListener('click', async () => {
-            showToast('Memulai bot...', 'info');
+            showToast('Memulai bot WhatsApp...', 'info');
+            if (waQrLoading) {
+                if (waQrLoadingText) waQrLoadingText.textContent = 'Memuat QR Code...';
+                waQrLoading.style.display = 'flex';
+            }
+            if (waDisconnectedState) waDisconnectedState.style.display = 'none';
+            if (waPairingBox) waPairingBox.style.display = 'none';
+
             try {
                 const res = await fetch('/api/bot/start', {
                     method: 'POST',
@@ -1249,19 +1371,131 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const data = await res.json();
 
                 if (res.ok) {
-                    showToast('Bot WhatsApp berhasil dijalankan!', 'success');
+                    showToast('Bot WhatsApp berhasil dimulai!', 'success');
                     checkBotStatus();
                 } else {
                     showToast(data.error || 'Gagal memulai bot', 'error');
+                    if (waQrLoading) waQrLoading.style.display = 'none';
+                    if (waDisconnectedState) waDisconnectedState.style.display = 'flex';
                 }
             } catch (e) {
+                if (waQrLoading) waQrLoading.style.display = 'none';
+                if (waDisconnectedState) waDisconnectedState.style.display = 'flex';
                 if (e.message === 'Failed to fetch' || e.name === 'TypeError') {
-                    showToast('Server Backend offline, pastikan backend-bot dijalankan', 'error');
+                    showToast('Server Backend offline, pastikan server aktif', 'error');
                 } else {
                     showToast('Gagal memulai bot', 'error');
                 }
             }
         });
+    }
+
+    if (btnGetPairingCode) {
+        btnGetPairingCode.addEventListener('click', async () => {
+            const rawPhone = inputWaPairPhone ? inputWaPairPhone.value.trim() : '';
+            if (!rawPhone || rawPhone.replace(/\D/g, '').length < 9) {
+                showToast('Masukkan nomor WhatsApp toko yang valid (contoh: 081234567890)', 'warning');
+                if (inputWaPairPhone) inputWaPairPhone.focus();
+                return;
+            }
+
+            const originalHtml = btnGetPairingCode.innerHTML;
+            btnGetPairingCode.disabled = true;
+            btnGetPairingCode.innerHTML = `<i class="ph ph-circle-notch" style="animation:spin 1s linear infinite;"></i> Menghubungkan...`;
+
+            if (waQrLoading) {
+                if (waQrLoadingText) waQrLoadingText.textContent = 'Menghubungi server WhatsApp...';
+                waQrLoading.style.display = 'flex';
+            }
+            if (waDisconnectedState) waDisconnectedState.style.display = 'none';
+            if (waPairingBox) waPairingBox.style.display = 'none';
+            if (waQrImage) waQrImage.style.display = 'none';
+
+            try {
+                showToast('Meminta kode pairing WhatsApp...', 'info');
+                const res = await fetch('/api/bot/pair-phone', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: window.currentUserId,
+                        phoneNumber: rawPhone
+                    })
+                });
+
+                const data = await res.json();
+                if (waQrLoading) waQrLoading.style.display = 'none';
+
+                if (res.ok && data.pairingCode) {
+                    showToast('Kode pairing berhasil dibuat!', 'success');
+                    if (waPairingBox) {
+                        waPairingBox.style.display = 'flex';
+                        if (waPairingCodeText) waPairingCodeText.textContent = data.pairingCode;
+                    }
+                    if (botStatusMsg) {
+                        botStatusMsg.innerHTML = `<i class="ph-fill ph-key"></i><span>Masukkan kode <strong>${data.pairingCode}</strong> di WhatsApp ponsel Anda.</span>`;
+                    }
+                    checkBotStatus();
+                } else if (res.ok && data.status === 'CONNECTED') {
+                    showToast('WhatsApp sudah terhubung!', 'success');
+                    checkBotStatus();
+                } else {
+                    showToast(data.error || 'Gagal mendapatkan kode pairing', 'error');
+                    if (waDisconnectedState) waDisconnectedState.style.display = 'flex';
+                }
+            } catch (err) {
+                if (waQrLoading) waQrLoading.style.display = 'none';
+                if (waDisconnectedState) waDisconnectedState.style.display = 'flex';
+                if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+                    showToast('Server backend offline', 'error');
+                } else {
+                    showToast(err.message || 'Gagal membuat kode pairing', 'error');
+                }
+            } finally {
+                btnGetPairingCode.disabled = false;
+                btnGetPairingCode.innerHTML = originalHtml;
+            }
+        });
+    }
+
+    if (btnCopyPairingCode) {
+        btnCopyPairingCode.addEventListener('click', () => {
+            const code = waPairingCodeText ? waPairingCodeText.textContent.trim() : '';
+            if (!code || code.includes('-') && code.length < 8) return;
+
+            const textToCopy = code.replace(/\s+/g, '');
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    handleCopySuccess();
+                }).catch(() => fallbackCopy(textToCopy));
+            } else {
+                fallbackCopy(textToCopy);
+            }
+        });
+    }
+
+    function handleCopySuccess() {
+        showToast('Kode pairing disalin ke clipboard!', 'success');
+        if (copyBtnText) copyBtnText.textContent = 'Tersalin!';
+        if (btnCopyPairingCode) {
+            btnCopyPairingCode.innerHTML = `<i class="ph-fill ph-check"></i> <span id="copyBtnText">Tersalin!</span>`;
+            setTimeout(() => {
+                btnCopyPairingCode.innerHTML = `<i class="ph ph-copy"></i> <span id="copyBtnText">Salin Kode</span>`;
+            }, 2500);
+        }
+    }
+
+    function fallbackCopy(text) {
+        const temp = document.createElement('input');
+        temp.value = text;
+        document.body.appendChild(temp);
+        temp.select();
+        try {
+            document.execCommand('copy');
+            handleCopySuccess();
+        } catch (e) {
+            showToast('Gagal menyalin kode secara otomatis', 'error');
+        }
+        document.body.removeChild(temp);
     }
 
     if (btnStopBot) {
@@ -1291,7 +1525,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btnRelinkBot) {
         btnRelinkBot.addEventListener('click', async () => {
             if (!window.currentUserId) return;
-            if (!confirm('Anda yakin ingin keluar (logout) dari sesi WhatsApp ini? Anda harus scan ulang QR Code.')) return;
+            if (!confirm('Anda yakin ingin keluar (logout) dari sesi WhatsApp ini? Anda harus menautkan ulang (scan QR atau kode pairing baru).')) return;
             try {
                 showToast('Sedang menghapus sesi WhatsApp...', 'info');
                 const res = await fetch('/api/bot/logout', {

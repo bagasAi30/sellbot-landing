@@ -263,6 +263,32 @@ function getAdminNumberList(kb) {
 }
 
 /**
+ * Helper untuk menunggu socket Baileys membuka koneksi WebSocket
+ */
+async function waitForSocketOpen(sock, timeoutMs = 15000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        if (sock?.ws?.isOpen) return true;
+        await new Promise(r => setTimeout(r, 250));
+    }
+    return Boolean(sock?.ws?.isOpen);
+}
+
+/**
+ * Format nomor telepon untuk WhatsApp pairing code (hanya angka, diawali kode negara e.g. 62)
+ */
+function sanitizePhoneNumber(phone) {
+    if (!phone) return null;
+    let clean = phone.toString().replace(/\D/g, '');
+    if (clean.startsWith('0')) {
+        clean = '62' + clean.slice(1);
+    } else if (!clean.startsWith('62') && clean.length >= 9 && clean.length <= 13) {
+        clean = '62' + clean;
+    }
+    return clean;
+}
+
+/**
  * Fungsi utama untuk menjalankan Bot WA untuk user tertentu
  */
 async function startWhatsAppBot(userId, onStatus) {
@@ -279,7 +305,7 @@ async function startWhatsAppBot(userId, onStatus) {
         browser: Browsers.ubuntu('Chrome')
     });
 
-    activeSessions[userId] = { sock: sock, status: 'CONNECTING', qr: null, customers: {} };
+    activeSessions[userId] = { sock: sock, status: 'CONNECTING', qr: null, pairingCode: null, customers: {} };
 
     // Mendengarkan perubahan status koneksi (QR Code, Connected, Disconnected)
     sock.ev.on('connection.update', async (update) => {
@@ -309,6 +335,7 @@ async function startWhatsAppBot(userId, onStatus) {
         } else if (connection === 'open') {
             activeSessions[userId].status = 'CONNECTED';
             activeSessions[userId].qr = null;
+            activeSessions[userId].pairingCode = null;
             console.log(`✅ WhatsApp terhubung untuk user: ${userId}`);
             if (onStatus) onStatus({ type: 'connected' });
         }
@@ -1285,6 +1312,68 @@ async function startWhatsAppBot(userId, onStatus) {
             }
         });
 
+        // Endpoint untuk meminta Pairing Code via Nomor HP (Alternatif selain Scan QR)
+        app.post('/api/bot/pair-phone', async (req, res) => {
+            const { userId, phoneNumber } = req.body;
+            if (!userId) return res.status(400).json({ error: 'userId diperlukan' });
+            if (!phoneNumber) return res.status(400).json({ error: 'Nomor telepon WhatsApp diperlukan' });
+
+            const cleanNumber = sanitizePhoneNumber(phoneNumber);
+            if (!cleanNumber || cleanNumber.length < 10) {
+                return res.status(400).json({ error: 'Nomor telepon tidak valid. Masukkan nomor WhatsApp yang benar (contoh: 081234567890).' });
+            }
+
+            try {
+                // Jika belum ada sesi atau sesi sebelumnya tertutup / tidak ada socket, mulai bot
+                if (!activeSessions[userId] || !activeSessions[userId].sock) {
+                    await startWhatsAppBot(userId);
+                }
+
+                const session = activeSessions[userId];
+                if (!session || !session.sock) {
+                    return res.status(500).json({ error: 'Gagal menginisialisasi sesi bot WhatsApp' });
+                }
+
+                if (session.status === 'CONNECTED') {
+                    return res.json({ status: 'CONNECTED', message: 'WhatsApp sudah terhubung!' });
+                }
+
+                // Tunggu hingga WebSocket Baileys membuka koneksi
+                const isOpen = await waitForSocketOpen(session.sock, 12000);
+                if (!isOpen) {
+                    return res.status(500).json({ error: 'Koneksi ke server WhatsApp belum siap. Silakan klik lagi dalam beberapa detik.' });
+                }
+
+                // Beri jeda sejenak untuk memastikan enkripsi noise handshake selesai
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // Request kode pairing dari WhatsApp
+                console.log(`[INFO] Meminta pairing code untuk user ${userId} ke nomor ${cleanNumber}...`);
+                const rawCode = await session.sock.requestPairingCode(cleanNumber);
+                console.log(`[INFO] Berhasil mendapatkan pairing code: ${rawCode}`);
+
+                let formattedCode = rawCode;
+                if (rawCode && rawCode.length === 8) {
+                    formattedCode = `${rawCode.slice(0, 4)}-${rawCode.slice(4)}`;
+                }
+
+                session.pairingCode = formattedCode;
+                session.status = 'WAITING_PAIRING_CODE';
+
+                res.json({
+                    success: true,
+                    status: 'PAIRING_CODE',
+                    pairingCode: formattedCode,
+                    rawCode: rawCode,
+                    phoneNumber: cleanNumber,
+                    message: 'Kode pairing berhasil dibuat!'
+                });
+            } catch (err) {
+                console.error('[ERROR] Gagal membuat pairing code:', err);
+                res.status(500).json({ error: 'Gagal mendapatkan kode pairing: ' + (err.message || 'Kesalahan server') });
+            }
+        });
+
         // Endpoint untuk mengecek status bot
         app.get('/api/bot/status/:userId', (req, res) => {
             const { userId } = req.params;
@@ -1292,11 +1381,13 @@ async function startWhatsAppBot(userId, onStatus) {
             if (session) {
                 if (session.status === 'CONNECTED') {
                     res.json({ status: 'CONNECTED', isBotActive: true });
+                } else if (session.status === 'WAITING_PAIRING_CODE' || session.pairingCode) {
+                    res.json({ status: 'PAIRING_CODE', pairingCode: session.pairingCode, qr: session.qr });
                 } else if (session.status === 'SCAN_QR') {
                     // Jika masih menunggu scan QR, kembalikan qr nya jika ada
-                    res.json({ status: 'qr', qr: session.qr });
+                    res.json({ status: 'qr', qr: session.qr, pairingCode: session.pairingCode || null });
                 } else {
-                    res.json({ status: 'CONNECTING' });
+                    res.json({ status: 'CONNECTING', pairingCode: session.pairingCode || null });
                 }
             } else {
                 res.json({ status: 'DISCONNECTED' });

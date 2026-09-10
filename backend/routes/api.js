@@ -143,6 +143,18 @@ router.post('/bot/start', async (req, res) => {
     res.json({ success: true, message: 'Bot WhatsApp berhasil dimulai / direstart', status: baileysService.getStatus() });
 });
 
+// POST /api/bot/pair-phone (Minta Pairing Code via nomor HP)
+router.post('/bot/pair-phone', async (req, res) => {
+    const { phoneNumber } = req.body;
+    if (!phoneNumber) return res.status(400).json({ error: 'Nomor WhatsApp diperlukan' });
+    try {
+        const result = await baileysService.requestPairingCode(phoneNumber);
+        res.json({ success: true, ...result });
+    } catch (err) {
+        res.status(500).json({ error: err.message || 'Gagal membuat kode pairing' });
+    }
+});
+
 // POST /api/bot/stop
 router.post('/bot/stop', async (req, res) => {
     await baileysService.stopWhatsApp();
