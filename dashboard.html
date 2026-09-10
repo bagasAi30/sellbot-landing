@@ -682,7 +682,7 @@
                         <p style="color: var(--text-secondary); font-size: 13px; margin: 0;">Kredit AI terpakai 1 poin setiap kali bot membalas pesan pelanggan secara otomatis.</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button class="btn btn-primary" onclick="openModal('checkoutModal')">
+                        <button class="btn btn-primary" onclick="openUpgradePlanModal()">
                             <i class="ph ph-plus-circle"></i> Top Up / Upgrade Paket
                         </button>
                     </div>
@@ -720,7 +720,7 @@
             <div class="pricing-grid">
                 
                 <!-- Starter -->
-                <div class="pricing-card">
+                <div class="pricing-card" data-plan="Starter">
                     <h3>STARTER</h3>
                     <div class="price">
                         Rp 99.000 <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">/bulan</span>
@@ -733,11 +733,11 @@
                         <li><i class="ph-fill ph-check-circle"></i> Blacklist</li>
                         <li><i class="ph-fill ph-check-circle"></i> 1 nomor WhatsApp</li>
                     </ul>
-                    <button class="btn btn-outline full-width" style="margin-top:20px;" onclick="openModal('checkoutModal')">Pilih Paket</button>
+                    <button class="btn btn-outline full-width plan-action-btn" data-plan="Starter" style="margin-top:20px;" onclick="selectPlan('Starter')">Pilih Paket</button>
                 </div>
 
                 <!-- Pro -->
-                <div class="pricing-card featured">
+                <div class="pricing-card featured" data-plan="Pro">
                     <div class="popular-badge">Recommended</div>
                     <h3>PRO</h3>
                     <div class="price">
@@ -751,11 +751,11 @@
                         <li><i class="ph-fill ph-check-circle"></i> Follow-up lanjutan</li>
                         <li><i class="ph-fill ph-check-circle"></i> 2 nomor WhatsApp</li>
                     </ul>
-                    <button class="btn btn-primary full-width" style="margin-top:20px;" onclick="openModal('checkoutModal')">Pilih Paket</button>
+                    <button class="btn btn-primary full-width plan-action-btn" data-plan="Pro" style="margin-top:20px;" onclick="selectPlan('Pro')">Pilih Paket</button>
                 </div>
 
                 <!-- Business -->
-                <div class="pricing-card">
+                <div class="pricing-card" data-plan="Business">
                     <h3>BUSINESS</h3>
                     <div class="price">
                         Rp 399.000 <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">/bulan</span>
@@ -768,11 +768,11 @@
                         <li><i class="ph-fill ph-check-circle"></i> Laporan lebih lengkap</li>
                         <li><i class="ph-fill ph-check-circle"></i> 5 nomor WhatsApp</li>
                     </ul>
-                    <button class="btn btn-outline full-width" style="margin-top:20px;" onclick="openModal('checkoutModal')">Pilih Paket</button>
+                    <button class="btn btn-outline full-width plan-action-btn" data-plan="Business" style="margin-top:20px;" onclick="selectPlan('Business')">Pilih Paket</button>
                 </div>
 
                 <!-- Agency -->
-                <div class="pricing-card">
+                <div class="pricing-card" data-plan="Agency">
                     <h3>🔥 AGENCY</h3>
                     <div class="price">
                         Rp 999.000 <span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">/bulan</span>
@@ -784,7 +784,7 @@
                         <li><i class="ph-fill ph-check-circle"></i> Priority support</li>
                         <li><i class="ph-fill ph-check-circle"></i> Fitur agency</li>
                     </ul>
-                    <button class="btn btn-outline full-width" style="margin-top:20px;" onclick="openModal('checkoutModal')">Pilih Paket</button>
+                    <button class="btn btn-outline full-width plan-action-btn" data-plan="Agency" style="margin-top:20px;" onclick="selectPlan('Agency')">Pilih Paket</button>
                 </div>
             </div>
         </section>
@@ -838,7 +838,20 @@
                 <h3>Selesaikan Pembayaran</h3>
                 <button class="modal-close" onclick="closeModal('checkoutModal')">&times;</button>
             </div>
-            <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">Pilih metode pembayaran untuk berlangganan layanan AsistenLapak AI.</p>
+            <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">Pilih metode pembayaran untuk berlangganan layanan AsistenLapak AI.</p>
+
+            <!-- Ringkasan Paket Terpilih -->
+            <div id="checkoutPlanSummary" style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.18); border-radius: 12px; padding: 14px 16px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Paket Dipilih</span>
+                    <h4 id="checkoutPlanName" style="margin: 2px 0 0 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">Paket PRO</h4>
+                    <span id="checkoutPlanCredits" style="font-size: 12px; color: #4F46E5; font-weight: 600;">8.000 AI Credit / bulan</span>
+                </div>
+                <div style="text-align: right;">
+                    <span style="font-size: 11px; color: var(--text-secondary); font-weight: 600;">Total Tagihan</span>
+                    <div id="checkoutPlanPrice" style="font-size: 18px; font-weight: 800; color: #10B981;">Rp 199.000</div>
+                </div>
+            </div>
 
             <div class="payment-methods" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px;">
                 <label class="payment-option"
@@ -996,7 +1009,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-client.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="SB-Mid-client-xxxxxxxxxxxxxxxxx"></script>
     <script src="dashboard.js"></script>
 </body>
 

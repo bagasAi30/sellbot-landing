@@ -26,11 +26,22 @@ function getSnapClient() {
 
 // Map paket ke harga dan kredit
 const PLAN_DETAILS = {
-    'Starter': { price: 49000, credits: 3000 },
-    'Pro': { price: 99000, credits: 8000 },
-    'Basic': { price: 99000, credits: 8000 },
-    'Business': { price: 199000, credits: 20000 }
+    'Starter': { price: 99000, credits: 3000, name: 'Starter' },
+    'Pro': { price: 199000, credits: 8000, name: 'Pro' },
+    'Business': { price: 399000, credits: 20000, name: 'Business' },
+    'Agency': { price: 999000, credits: 50000, name: 'Agency' }
 };
+
+function findPlanDetail(planName) {
+    if (!planName) return null;
+    const clean = planName.trim().toLowerCase();
+    for (const [key, val] of Object.entries(PLAN_DETAILS)) {
+        if (key.toLowerCase() === clean) {
+            return { key, ...val };
+        }
+    }
+    return null;
+}
 
 // GET /api/payment/config
 // Mengambil client key & environment mode untuk frontend
@@ -41,6 +52,50 @@ router.get('/config', (req, res) => {
         isProduction: process.env.MIDTRANS_IS_PRODUCTION === 'true',
         isConfigured: Boolean(process.env.MIDTRANS_SERVER_KEY && process.env.MIDTRANS_CLIENT_KEY)
     });
+});
+
+// GET /api/payment/test-connection
+// Endpoint diagnostik untuk memverifikasi apakah kredensial Midtrans valid
+router.get('/test-connection', async (req, res) => {
+    try {
+        const serverKey = process.env.MIDTRANS_SERVER_KEY || '';
+        const clientKey = process.env.MIDTRANS_CLIENT_KEY || '';
+        const isProduction = process.env.MIDTRANS_IS_PRODUCTION === 'true';
+
+        if (!serverKey || !clientKey) {
+            return res.status(400).json({
+                success: false,
+                message: 'Kredensial Midtrans belum diisi di .env (MIDTRANS_SERVER_KEY / MIDTRANS_CLIENT_KEY)'
+            });
+        }
+
+        const snap = getSnapClient();
+        const testOrderId = `TEST-${Date.now()}`;
+        const testParam = {
+            transaction_details: {
+                order_id: testOrderId,
+                gross_amount: 10000
+            }
+        };
+
+        const result = await snap.createTransaction(testParam);
+        return res.json({
+            success: true,
+            mode: isProduction ? 'Production' : 'Sandbox',
+            message: 'Kredensial Midtrans VALID dan berhasil terhubung!',
+            tokenGenerated: Boolean(result && result.token)
+        });
+    } catch (err) {
+        const is401 = err.message && err.message.includes('401');
+        return res.status(400).json({
+            success: false,
+            mode: process.env.MIDTRANS_IS_PRODUCTION === 'true' ? 'Production' : 'Sandbox',
+            error: err.message,
+            hint: is401 
+                ? 'Error 401 Unauthorized: Server Key ditolak oleh Midtrans. Pastikan: (1) Jika testing, gunakan akun Midtrans Sandbox (awalan SB-Mid-) dan MIDTRANS_IS_PRODUCTION=false. (2) Jika Production, pastikan status merchant Midtrans sudah Approved/Active. (3) Pastikan IP Whitelist di MAP Midtrans (Settings > Access Keys) dikosongkan.'
+                : 'Periksa kembali konfigurasi Midtrans Anda.'
+        });
+    }
 });
 
 // POST /api/payment/create
@@ -59,14 +114,14 @@ router.post('/create', async (req, res) => {
 
         const { plan, userId, email, name, phone, paymentMethod } = req.body;
 
-        if (!plan || !PLAN_DETAILS[plan]) {
+        const planDetail = findPlanDetail(plan);
+        if (!planDetail) {
             return res.status(400).json({
                 success: false,
                 message: `Paket tidak valid. Pilihan yang tersedia: ${Object.keys(PLAN_DETAILS).join(', ')}`
             });
         }
 
-        const planDetail = PLAN_DETAILS[plan];
         const orderId = `ORDER-${userId ? userId.substring(0, 8) : 'GUEST'}-${Date.now()}`;
 
         // 1. Simpan history transaksi status PENDING di Supabase invoices jika supabase tersedia
@@ -77,7 +132,7 @@ router.post('/create', async (req, res) => {
                     .insert([{
                         id: orderId,
                         user_id: userId,
-                        plan_name: plan,
+                        plan_name: planDetail.name,
                         amount: planDetail.price,
                         credits_added: planDetail.credits,
                         status: 'pending',
@@ -106,10 +161,10 @@ router.post('/create', async (req, res) => {
             },
             item_details: [
                 {
-                    id: plan.toLowerCase(),
+                    id: planDetail.name.toLowerCase(),
                     price: planDetail.price,
                     quantity: 1,
-                    name: `Paket AI ${plan} (${planDetail.credits.toLocaleString('id-ID')} Kredit)`
+                    name: `Paket AI ${planDetail.name} (${planDetail.credits.toLocaleString('id-ID')} Kredit)`
                 }
             ]
         };
@@ -125,9 +180,14 @@ router.post('/create', async (req, res) => {
 
     } catch (error) {
         console.error('🔥 Midtrans Create Error:', error);
+        let userMessage = error.message || 'Terjadi kesalahan saat memproses transaksi pembayaran.';
+        if (error.message && error.message.includes('401')) {
+            userMessage = 'Autentikasi Midtrans Gagal (HTTP 401): Akses ditolak. Kredensial Server Key tidak valid atau mode Production/Sandbox tidak sesuai. Jika sedang mencoba tes, gunakan akun & kunci Sandbox (awalan SB-Mid-).';
+        }
         res.status(500).json({
             success: false,
-            message: error.message || 'Terjadi kesalahan saat memproses transaksi pembayaran.'
+            message: userMessage,
+            rawError: error.message
         });
     }
 });

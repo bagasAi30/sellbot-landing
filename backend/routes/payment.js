@@ -18,10 +18,22 @@ const supabase = createClient(
 
 // Map paket ke harga dan kredit
 const PLAN_DETAILS = {
-    'Starter': { price: 49000, credits: 3000 },
-    'Basic': { price: 99000, credits: 8000 },
-    'Pro': { price: 199000, credits: 20000 }
+    'Starter': { price: 99000, credits: 3000, name: 'Starter' },
+    'Pro': { price: 199000, credits: 8000, name: 'Pro' },
+    'Business': { price: 399000, credits: 20000, name: 'Business' },
+    'Agency': { price: 999000, credits: 50000, name: 'Agency' }
 };
+
+function findPlanDetail(planName) {
+    if (!planName) return null;
+    const clean = planName.trim().toLowerCase();
+    for (const [key, val] of Object.entries(PLAN_DETAILS)) {
+        if (key.toLowerCase() === clean) {
+            return { key, ...val };
+        }
+    }
+    return null;
+}
 
 // POST /api/payment/create
 // Endpoint untuk dipanggil dari Frontend saat user klik "Beli"
@@ -29,11 +41,11 @@ router.post('/create', async (req, res) => {
     try {
         const { plan, userId, email, name, phone } = req.body;
 
-        if (!PLAN_DETAILS[plan]) {
-            return res.status(400).json({ success: false, message: 'Paket tidak valid' });
+        const planDetail = findPlanDetail(plan);
+        if (!planDetail) {
+            return res.status(400).json({ success: false, message: `Paket tidak valid. Pilihan: ${Object.keys(PLAN_DETAILS).join(', ')}` });
         }
 
-        const planDetail = PLAN_DETAILS[plan];
         const orderId = `ORDER-${userId}-${Date.now()}`;
 
         // 1. Simpan history transaksi status PENDING di Supabase invoices
