@@ -11,7 +11,8 @@ if (typeof WebSocket === 'undefined') {
 
 const express = require('express');
 const cors = require('cors');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage, extractMessageContent, Browsers } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage, extractMessageContent, Browsers, makeCacheableSignalKeyStore, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const pino = require('pino');
 const qrcode = require('qrcode');
 const { createClient } = require('@supabase/supabase-js');
 const { generateAIResponse, processImageWithGemini, extractIntentWithGemini, extractOrderDetails, cleanAndValidateLocation } = require('./ai');
@@ -296,17 +297,40 @@ function sanitizePhoneNumber(phone) {
  * Fungsi utama untuk menjalankan Bot WA untuk user tertentu
  */
 async function startWhatsAppBot(userId, onStatus) {
-    if (activeSessions[userId]) {
+    if (activeSessions[userId] && activeSessions[userId].sock) {
         console.log(`Sesi untuk user ${userId} sudah berjalan.`);
         return;
     }
 
-    const { state, saveCreds } = await useMultiFileAuthState(`auth_info_${userId}`);
+    const sessionDir = path.join(__dirname, `auth_info_${userId}`);
+    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+
+    // Ambil versi WhatsApp Web terbaru agar handshake sinkron dengan server WhatsApp
+    let version = [2, 3000, 1043857760];
+    try {
+        const vInfo = await fetchLatestBaileysVersion();
+        if (vInfo && vInfo.version) version = vInfo.version;
+    } catch (vErr) {
+        console.warn('⚠️ Gagal fetch versi Baileys terbaru, gunakan default:', vErr.message);
+    }
+
+    const logger = pino({ level: 'silent' });
 
     const sock = makeWASocket({
-        auth: state,
+        version,
+        auth: {
+            creds: state.creds,
+            keys: makeCacheableSignalKeyStore(state.keys, logger)
+        },
+        logger,
         printQRInTerminal: true,
-        browser: Browsers.ubuntu('Chrome')
+        browser: Browsers.ubuntu('Chrome'),
+        syncFullHistory: false,
+        markOnlineOnConnect: false,
+        generateHighQualityLinkPreview: false,
+        defaultQueryTimeoutMs: 60000,
+        connectTimeoutMs: 60000,
+        keepAliveIntervalMs: 30000
     });
 
     activeSessions[userId] = { sock: sock, status: 'CONNECTING', qr: null, pairingCode: null, customers: {} };
@@ -318,8 +342,10 @@ async function startWhatsAppBot(userId, onStatus) {
         if (qr) {
             try {
                 const qrBase64 = await qrcode.toDataURL(qr);
-                activeSessions[userId].status = 'SCAN_QR';
-                activeSessions[userId].qr = qrBase64;
+                if (activeSessions[userId]) {
+                    activeSessions[userId].status = 'SCAN_QR';
+                    activeSessions[userId].qr = qrBase64;
+                }
                 if (onStatus) onStatus({ type: 'qr', data: qrBase64 }); // Kirim QR ke frontend
             } catch (err) {
                 console.error('Gagal generate QR:', err);
@@ -327,19 +353,35 @@ async function startWhatsAppBot(userId, onStatus) {
         }
 
         if (connection === 'close') {
-            const isLoggedOut = (lastDisconnect.error)?.output?.statusCode === DisconnectReason.loggedOut;
+            const statusCode = (lastDisconnect?.error)?.output?.statusCode;
+            const isLoggedOut = statusCode === DisconnectReason.loggedOut;
             const shouldReconnect = !isLoggedOut && !sock.isManuallyStopped;
-            console.log(`Koneksi tertutup untuk ${userId}. Reconnect: ${shouldReconnect}`);
+            console.log(`Koneksi tertutup untuk ${userId}. Status: ${statusCode}, Reconnect: ${shouldReconnect}`);
+            
             delete activeSessions[userId];
-            if (shouldReconnect) {
+
+            if (isLoggedOut) {
+                console.log(`Sesi user ${userId} telah keluar (logged out), membersihkan direktori auth...`);
+                try {
+                    if (fs.existsSync(sessionDir)) {
+                        fs.rmSync(sessionDir, { recursive: true, force: true });
+                    }
+                } catch (rmErr) {
+                    console.warn('Gagal membersihkan direktori auth:', rmErr.message);
+                }
+            } else if (shouldReconnect) {
+                // Jika restartRequired (515), reconnect instan (500ms) agar WhatsApp di HP tidak timeout saat menautkan
+                const reconnectDelay = statusCode === DisconnectReason.restartRequired ? 500 : 5000;
                 setTimeout(() => {
                     startWhatsAppBot(userId);
-                }, 5000);
+                }, reconnectDelay);
             }
         } else if (connection === 'open') {
-            activeSessions[userId].status = 'CONNECTED';
-            activeSessions[userId].qr = null;
-            activeSessions[userId].pairingCode = null;
+            if (activeSessions[userId]) {
+                activeSessions[userId].status = 'CONNECTED';
+                activeSessions[userId].qr = null;
+                activeSessions[userId].pairingCode = null;
+            }
             console.log(`✅ WhatsApp terhubung untuk user: ${userId}`);
             if (onStatus) onStatus({ type: 'connected' });
         }
@@ -1297,7 +1339,15 @@ async function startWhatsAppBot(userId, onStatus) {
             if (!userId) return res.status(400).json({ error: 'userId diperlukan' });
 
             if (activeSessions[userId]) {
-                return res.json({ status: activeSessions[userId].status, message: 'Bot sudah dipanggil' });
+                if (activeSessions[userId].status === 'CONNECTED') {
+                    return res.json({ status: 'CONNECTED', message: 'WhatsApp sudah terhubung' });
+                }
+                if (activeSessions[userId].qr) {
+                    return res.json({ status: 'qr', qr: activeSessions[userId].qr });
+                }
+                if (activeSessions[userId].sock) {
+                    return res.json({ status: activeSessions[userId].status, message: 'Bot sudah dipanggil' });
+                }
             }
 
             try {
@@ -1413,7 +1463,7 @@ async function startWhatsAppBot(userId, onStatus) {
 
             if (activeSessions[userId]) {
                 activeSessions[userId].sock.isManuallyStopped = true;
-                activeSessions[userId].sock.ws.close();
+                if (activeSessions[userId].sock.ws) activeSessions[userId].sock.ws.close();
                 delete activeSessions[userId];
                 res.json({ message: 'Bot berhasil dimatikan' });
             } else {
@@ -1437,9 +1487,14 @@ async function startWhatsAppBot(userId, onStatus) {
                 }
                 const fs = require('fs');
                 const path = require('path');
-                const sessionPath = path.join(__dirname, `auth_info_${userId}`);
-                if (fs.existsSync(sessionPath)) {
-                    fs.rmSync(sessionPath, { recursive: true, force: true });
+                const targets = [
+                    path.join(__dirname, `auth_info_${userId}`),
+                    path.resolve(`auth_info_${userId}`)
+                ];
+                for (const t of targets) {
+                    if (fs.existsSync(t)) {
+                        fs.rmSync(t, { recursive: true, force: true });
+                    }
                 }
                 res.json({ message: 'Sesi WhatsApp berhasil dihapus. Silakan klik Jalankan Bot untuk tautkan ulang.' });
             } catch (error) {
