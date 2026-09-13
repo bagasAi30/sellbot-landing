@@ -75,28 +75,28 @@
                     <div class="metric-card glass">
                         <div class="metric-icon highlight"><i class="ph ph-users"></i></div>
                         <div class="metric-info">
-                            <h3>1,240</h3>
+                            <h3 id="statActiveCustomers">-</h3>
                             <p>Active Customers</p>
                         </div>
                     </div>
                     <div class="metric-card glass">
                         <div class="metric-icon success"><i class="ph ph-chart-line-up"></i></div>
                         <div class="metric-info">
-                            <h3>Rp 45.5M</h3>
+                            <h3 id="statMonthlyRev">-</h3>
                             <p>Monthly Recurring Rev.</p>
                         </div>
                     </div>
                     <div class="metric-card glass">
                         <div class="metric-icon"><i class="ph ph-chats-circle"></i></div>
                         <div class="metric-info">
-                            <h3>1.2M</h3>
+                            <h3 id="statTotalMessages">-</h3>
                             <p>Total Messages (Platform)</p>
                         </div>
                     </div>
                     <div class="metric-card glass">
                         <div class="metric-icon success"><i class="ph ph-activity"></i></div>
                         <div class="metric-info">
-                            <h3>99.9%</h3>
+                            <h3 id="statSystemUptime">-</h3>
                             <p>System Uptime</p>
                         </div>
                     </div>
@@ -145,25 +145,9 @@
                                 </thead>
                                 <tbody id="recentUsersBody">
                                     <tr>
-                                        <td><strong>Toko Baju Kekinian</strong><br><span style="font-size:12px;color:var(--text-secondary);">Andi Setiawan</span></td>
-                                        <td><span class="tag tag-pro">Pro Plan</span></td>
-                                        <td><span class="status-badge closed">Active</span></td>
-                                        <td>Today, 10:45 AM</td>
-                                        <td><button class="btn btn-outline btn-small">Manage</button></td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Gadget Store Jkt</strong><br><span style="font-size:12px;color:var(--text-secondary);">Budi Santoso</span></td>
-                                        <td><span class="tag tag-starter">Starter</span></td>
-                                        <td><span class="status-badge closed">Active</span></td>
-                                        <td>Yesterday</td>
-                                        <td><button class="btn btn-outline btn-small">Manage</button></td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Aksesoris Cantik</strong><br><span style="font-size:12px;color:var(--text-secondary);">Siska</span></td>
-                                        <td><span class="tag tag-trial">Trial</span></td>
-                                        <td><span class="status-badge error">Expired</span></td>
-                                        <td>Oct 15, 2023</td>
-                                        <td><button class="btn btn-outline btn-small">Manage</button></td>
+                                        <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 24px;">
+                                            <i class="ph ph-spinner ph-spin" style="font-size: 20px;"></i> Memuat data pendaftaran terbaru...
+                                        </td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -176,8 +160,9 @@
             <section id="users" class="dashboard-section">
                 <header class="section-header">
                     <h2>User Management</h2>
-                    <div class="filters">
+                    <div class="filters" style="display: flex; gap: 10px; align-items: center;">
                         <input type="text" placeholder="Search customer or store..." class="filter-select glass" style="width: 250px;">
+                        <button class="btn btn-outline btn-small" id="btnRefreshUsers" title="Refresh User List"><i class="ph ph-arrow-clockwise"></i></button>
                     </div>
                 </header>
 
@@ -196,28 +181,9 @@
                             </thead>
                             <tbody id="allUsersBody">
                                 <tr>
-                                    <td><strong>Andi Setiawan</strong></td>
-                                    <td>+62 812-3456-7890</td>
-                                    <td>Toko Baju Kekinian</td>
-                                    <td><span class="tag tag-pro">Pro Plan</span></td>
-                                    <td><span class="status-badge closed">Active</span></td>
-                                    <td><button class="btn btn-outline btn-small">Edit</button></td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Budi Santoso</strong></td>
-                                    <td>+62 899-1122-3344</td>
-                                    <td>Gadget Store Jkt</td>
-                                    <td><span class="tag tag-starter">Starter</span></td>
-                                    <td><span class="status-badge closed">Active</span></td>
-                                    <td><button class="btn btn-outline btn-small">Edit</button></td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Siska</strong></td>
-                                    <td>+62 855-6677-8899</td>
-                                    <td>Aksesoris Cantik</td>
-                                    <td><span class="tag tag-trial">Trial</span></td>
-                                    <td><span class="status-badge error">Suspended</span></td>
-                                    <td><button class="btn btn-outline btn-small">Activate</button></td>
+                                    <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 24px;">
+                                        <i class="ph ph-spinner ph-spin" style="font-size: 20px;"></i> Memuat data pelanggan...
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -228,28 +194,31 @@
             <section id="revenue" class="dashboard-section">
                 <header class="section-header">
                     <h2>Revenue & Billing</h2>
-                    <button class="btn btn-outline" id="btnExportCsv"><i class="ph ph-download-simple"></i> Export CSV</button>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-outline" id="btnRefreshRevenue"><i class="ph ph-arrow-clockwise"></i> Refresh</button>
+                        <button class="btn btn-outline" id="btnExportCsv"><i class="ph ph-download-simple"></i> Export CSV</button>
+                    </div>
                 </header>
                 
                 <div class="metrics-grid" style="margin-bottom: 24px;">
                     <div class="metric-card glass">
                         <div class="metric-icon success"><i class="ph ph-money"></i></div>
                         <div class="metric-info">
-                            <h3>Rp 45.5M</h3>
+                            <h3 id="statRevTotal">-</h3>
                             <p>Total Revenue (MTD)</p>
                         </div>
                     </div>
                     <div class="metric-card glass">
                         <div class="metric-icon highlight"><i class="ph ph-receipt"></i></div>
                         <div class="metric-info">
-                            <h3>142</h3>
+                            <h3 id="statRevSubs">-</h3>
                             <p>Active Subscriptions</p>
                         </div>
                     </div>
                     <div class="metric-card glass">
                         <div class="metric-icon warning"><i class="ph ph-clock"></i></div>
                         <div class="metric-info">
-                            <h3>Rp 2.1M</h3>
+                            <h3 id="statRevPending">-</h3>
                             <p>Pending Invoices</p>
                         </div>
                     </div>
@@ -264,33 +233,17 @@
                             <thead>
                                 <tr>
                                     <th>Invoice ID</th>
-                                    <th>Store Name</th>
+                                    <th>Store / Customer</th>
                                     <th>Amount</th>
                                     <th>Method</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="revenueTableBody">
                                 <tr>
-                                    <td><strong>INV-2023-089</strong></td>
-                                    <td>Toko Baju Kekinian</td>
-                                    <td>Rp 350,000</td>
-                                    <td>Bank Transfer</td>
-                                    <td><span class="status-badge closed">Paid</span></td>
-                                </tr>
-                                <tr>
-                                    <td><strong>INV-2023-088</strong></td>
-                                    <td>Gadget Store Jkt</td>
-                                    <td>Rp 150,000</td>
-                                    <td>QRIS</td>
-                                    <td><span class="status-badge closed">Paid</span></td>
-                                </tr>
-                                <tr>
-                                    <td><strong>INV-2023-087</strong></td>
-                                    <td>Aksesoris Cantik</td>
-                                    <td>Rp 150,000</td>
-                                    <td>Credit Card</td>
-                                    <td><span class="status-badge human">Pending</span></td>
+                                    <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 24px;">
+                                        <i class="ph ph-spinner ph-spin" style="font-size: 20px;"></i> Memuat data transaksi...
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -301,29 +254,32 @@
             <section id="health" class="dashboard-section">
                 <header class="section-header">
                     <h2>System Health & Monitoring</h2>
-                    <span class="status-badge closed"><i class="ph-fill ph-check-circle"></i> All Systems Operational</span>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <span id="healthOverallBadge" class="status-badge closed"><i class="ph-fill ph-check-circle"></i> Memeriksa Status...</span>
+                        <button class="btn btn-outline btn-small" id="btnRefreshHealth" title="Refresh Health"><i class="ph ph-arrow-clockwise"></i></button>
+                    </div>
                 </header>
 
                 <div class="metrics-grid">
                     <div class="metric-card glass">
                         <div class="metric-icon highlight"><i class="ph ph-cpu"></i></div>
                         <div class="metric-info">
-                            <h3>42%</h3>
+                            <h3 id="statHealthCpu">-</h3>
                             <p>Server CPU Usage</p>
                         </div>
                     </div>
                     <div class="metric-card glass">
                         <div class="metric-icon"><i class="ph ph-memory"></i></div>
                         <div class="metric-info">
-                            <h3>68%</h3>
+                            <h3 id="statHealthRam">-</h3>
                             <p>Memory (RAM) Usage</p>
                         </div>
                     </div>
                     <div class="metric-card glass">
-                        <div class="metric-icon warning"><i class="ph-fill ph-cpu"></i></div>
+                        <div class="metric-icon success"><i class="ph-fill ph-whatsapp-logo"></i></div>
                         <div class="metric-info">
-                            <h3>80%</h3>
-                            <p>AI API Quota Limit</p>
+                            <h3 id="statHealthBots">-</h3>
+                            <p>WhatsApp Bot Aktif</p>
                         </div>
                     </div>
                 </div>
@@ -332,22 +288,9 @@
                     <div class="widget-header">
                         <h3>Microservices Status</h3>
                     </div>
-                    <div class="settings-list">
-                        <div class="setting-item">
-                            <span class="setting-label">WhatsApp Cloud API Gateway</span>
-                            <span class="setting-value" style="color: var(--success);"><i class="ph-fill ph-check-circle"></i> Operational (99.9% uptime)</span>
-                        </div>
-                        <div class="setting-item">
-                            <span class="setting-label">OpenAI Language Models</span>
-                            <span class="setting-value" style="color: var(--success);"><i class="ph-fill ph-check-circle"></i> Operational (142ms avg response)</span>
-                        </div>
-                        <div class="setting-item">
-                            <span class="setting-label">Database Cluster (PostgreSQL)</span>
-                            <span class="setting-value" style="color: var(--success);"><i class="ph-fill ph-check-circle"></i> Operational (Replication Sync OK)</span>
-                        </div>
-                        <div class="setting-item">
-                            <span class="setting-label">Vector DB (Knowledge Base)</span>
-                            <span class="setting-value" style="color: #FBBF24;"><i class="ph-fill ph-warning-circle"></i> Minor Degradation (High load)</span>
+                    <div id="microservicesList" class="settings-list">
+                        <div style="text-align: center; color: var(--text-secondary); padding: 24px;">
+                            <i class="ph ph-spinner ph-spin" style="font-size: 20px;"></i> Memeriksa kesehatan mikroservis...
                         </div>
                     </div>
                 </div>
@@ -365,13 +308,13 @@
                             <h3><i class="ph-fill ph-key"></i> Core Integrations</h3>
                         </div>
                         <div class="form-group">
-                            <label>OpenAI Master API Key</label>
-                            <input type="password" class="form-control" value="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" placeholder="sk-...">
-                            <span class="form-hint">Used as a fallback when customers don't provide their own keys.</span>
+                            <label>Master AI API Key (Gemini / Groq)</label>
+                            <input type="password" class="form-control" id="settingMasterAiKey" placeholder="AI Key...">
+                            <span class="form-hint">Digunakan sebagai fallback sistem otomatis.</span>
                         </div>
                         <div class="form-group">
-                            <label>WhatsApp Business Account ID</label>
-                            <input type="text" class="form-control" value="109283746519283" placeholder="WABA ID">
+                            <label>Store Origin / RajaOngkir ID</label>
+                            <input type="text" class="form-control" id="settingWabaId" placeholder="Store Origin ID">
                         </div>
                     </div>
 
@@ -381,16 +324,16 @@
                         </div>
                         <div class="form-group">
                             <label>Default Trial Period (Days)</label>
-                            <input type="number" class="form-control" value="14" placeholder="14">
+                            <input type="number" class="form-control" id="settingTrialDays" placeholder="14">
                         </div>
                         <div class="form-group">
                             <div class="toggle-row">
                                 <div>
                                     <label style="margin-bottom: 2px;">Global Maintenance Mode</label>
-                                    <span class="form-hint">Temporarily disable access for all non-admin users.</span>
+                                    <span class="form-hint">Nonaktifkan akses sementara untuk tenant reguler.</span>
                                 </div>
                                 <label class="toggle-switch">
-                                    <input type="checkbox">
+                                    <input type="checkbox" id="settingMaintenanceMode">
                                     <span class="slider"></span>
                                 </label>
                             </div>
@@ -491,12 +434,15 @@
 
     <!-- Modal: Server Logs -->
     <div class="modal-overlay" id="serverLogsModal">
-        <div class="modal-content" style="max-width:700px;">
-            <div class="modal-header">
+        <div class="modal-content" style="max-width:750px;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <h3><i class="ph ph-terminal-window"></i> Server Logs</h3>
-                <button class="modal-close" onclick="closeModal('serverLogsModal')">&times;</button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn btn-outline btn-small" id="btnRefreshServerLogs"><i class="ph ph-arrow-clockwise"></i> Refresh</button>
+                    <button class="modal-close" onclick="closeModal('serverLogsModal')">&times;</button>
+                </div>
             </div>
-            <pre id="serverLogsContent" style="background:rgba(0,0,0,0.4);border-radius:12px;padding:20px;font-size:12px;font-family:monospace;color:#a3e635;overflow-y:auto;max-height:400px;white-space:pre-wrap;border:1px solid rgba(255,255,255,0.08);">Memuat log...</pre>
+            <pre id="serverLogsContent" style="background:rgba(0,0,0,0.6);border-radius:12px;padding:20px;font-size:12px;font-family:Consolas,monospace;color:#a3e635;overflow-y:auto;max-height:420px;white-space:pre-wrap;border:1px solid rgba(255,255,255,0.08);line-height:1.5;">Memuat log server...</pre>
             <button class="btn btn-outline full-width" style="margin-top:16px;" onclick="closeModal('serverLogsModal')">Tutup</button>
         </div>
     </div>

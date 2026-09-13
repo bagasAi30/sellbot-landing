@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  sellbot-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sellbot-app
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    env_file:
+      - ./sellbot-landing/backend-bot/.env
+    volumes:
+      # Mount folder backend-bot agar sesi WhatsApp (auth_info_*) dan file upload persisten
+      - ./sellbot-landing/backend-bot:/app/sellbot-landing/backend-bot
+      - /app/sellbot-landing/backend-bot/node_modules
