@@ -882,31 +882,43 @@ document.addEventListener('DOMContentLoaded', async () => {
                 })
             });
 
-            const result = await response.json();
-
-            // Pastikan Midtrans Snap SDK ter-load
-            if (typeof window.snap === 'undefined' || typeof window.snap.pay !== 'function') {
-                try {
-                    const cfgRes = await fetch('/api/payment/config');
-                    const cfg = await cfgRes.json();
-                    if (cfg && cfg.clientKey) {
-                        await new Promise((resolve) => {
-                            const script = document.createElement('script');
-                            script.src = cfg.isProduction
-                                ? 'https://app.midtrans.com/snap/snap.js'
-                                : 'https://app.sandbox.midtrans.com/snap/snap.js';
-                            script.setAttribute('data-client-key', cfg.clientKey);
-                            script.onload = () => resolve(true);
-                            script.onerror = () => resolve(false);
-                            document.head.appendChild(script);
-                        });
-                    }
-                } catch (e) {
-                    console.warn('Gagal memuat snap.js otomatis:', e);
-                }
+            let result = null;
+            try {
+                result = await response.json();
+            } catch (jsonErr) {
+                const rawText = await response.text().catch(() => '');
+                console.error('Non-JSON response dari server payment:', rawText);
+                result = {
+                    success: false,
+                    message: response.status === 401 
+                        ? 'Autentikasi Midtrans Gagal (HTTP 401): Server Key tidak valid atau mode Sandbox/Production tidak sesuai.'
+                        : `Gagal memproses transaksi pembayaran (Server status: ${response.status}).`
+                };
             }
 
-            if (result.success && result.token) {
+            if (result && result.success && result.token) {
+                // Pastikan Midtrans Snap SDK ter-load
+                if (typeof window.snap === 'undefined' || typeof window.snap.pay !== 'function') {
+                    try {
+                        const cfgRes = await fetch('/api/payment/config');
+                        const cfg = await cfgRes.json();
+                        if (cfg && cfg.clientKey) {
+                            await new Promise((resolve) => {
+                                const script = document.createElement('script');
+                                script.src = cfg.isProduction
+                                    ? 'https://app.midtrans.com/snap/snap.js'
+                                    : 'https://app.sandbox.midtrans.com/snap/snap.js';
+                                script.setAttribute('data-client-key', cfg.clientKey);
+                                script.onload = () => resolve(true);
+                                script.onerror = () => resolve(false);
+                                document.head.appendChild(script);
+                            });
+                        }
+                    } catch (e) {
+                        console.warn('Gagal memuat snap.js otomatis:', e);
+                    }
+                }
+
                 // Close checkout modal
                 closeModal('checkoutModal');
                 
@@ -934,15 +946,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                     showToast('Snap Midtrans belum siap. Periksa konfigurasi kredensial.', 'error');
                 }
             } else {
-                let errMsg = result.message || 'Gagal membuat transaksi';
-                if (result.rawError && result.rawError.includes('401')) {
+                let errMsg = (result && result.message) || 'Gagal membuat transaksi pembayaran.';
+                if ((result && result.rawError && result.rawError.includes('401')) || (result && result.is401)) {
                     errMsg = 'Autentikasi Midtrans Gagal (HTTP 401): Server Key tidak valid atau mode Sandbox/Production tidak sesuai. Mohon periksa kembali kredensial di Environment Variables.';
                 }
                 showToast(errMsg, 'error');
             }
         } catch (error) {
             console.error('Payment Error:', error);
-            showToast('Terjadi kesalahan pada sistem pembayaran.', 'error');
+            showToast(error.message || 'Terjadi kesalahan pada sistem pembayaran.', 'error');
         } finally {
             btn.innerHTML = originalText;
             btn.disabled = false;

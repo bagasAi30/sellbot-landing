@@ -7,3 +7,4 @@ backend/.env
 sellbot-landing/backend-bot/.env
 node_modules/
 auth_info_*
+*platform-settings.json

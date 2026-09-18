@@ -89,8 +89,13 @@ router.post('/create', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Midtrans Create Error:', error);
-        res.status(500).json({ success: false, message: error.message });
+        console.error('Midtrans Create Error:', error.message || String(error));
+        let userMessage = error.message || 'Terjadi kesalahan saat memproses transaksi pembayaran.';
+        const is401 = Boolean(error.message && error.message.includes('401'));
+        if (is401) {
+            userMessage = 'Autentikasi Midtrans Gagal (HTTP 401): Akses ditolak oleh Midtrans. Mohon periksa MIDTRANS_SERVER_KEY dan mode Sandbox/Production.';
+        }
+        res.status(400).json({ success: false, message: userMessage, rawError: error.message, is401 });
     }
 });
 

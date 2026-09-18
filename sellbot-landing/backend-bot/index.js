@@ -28,12 +28,40 @@ const serverStartTime = Date.now();
 const serverLogsBuffer = [];
 const MAX_LOG_ENTRIES = 150;
 
+function safeStringify(item) {
+    if (item === null || item === undefined) return String(item);
+    if (item instanceof Error) return item.stack || item.message || String(item);
+    if (typeof item === 'object') {
+        try {
+            return JSON.stringify(item);
+        } catch {
+            try {
+                const seen = new WeakSet();
+                return JSON.stringify(item, (key, value) => {
+                    if (typeof value === 'object' && value !== null) {
+                        if (seen.has(value)) return '[Circular]';
+                        seen.add(value);
+                    }
+                    return value;
+                });
+            } catch {
+                return Object.prototype.toString.call(item);
+            }
+        }
+    }
+    return String(item);
+}
+
 function pushServerLog(level, args) {
-    const timestamp = new Date().toISOString();
-    const message = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
-    serverLogsBuffer.push({ timestamp, level, message });
-    if (serverLogsBuffer.length > MAX_LOG_ENTRIES) {
-        serverLogsBuffer.shift();
+    try {
+        const timestamp = new Date().toISOString();
+        const message = args.map(safeStringify).join(' ');
+        serverLogsBuffer.push({ timestamp, level, message });
+        if (serverLogsBuffer.length > MAX_LOG_ENTRIES) {
+            serverLogsBuffer.shift();
+        }
+    } catch {
+        // Logging internal never throws
     }
 }
 

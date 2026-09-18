@@ -179,15 +179,17 @@ router.post('/create', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('🔥 Midtrans Create Error:', error);
+        console.error('🔥 Midtrans Create Error:', error.message || String(error));
         let userMessage = error.message || 'Terjadi kesalahan saat memproses transaksi pembayaran.';
-        if (error.message && error.message.includes('401')) {
-            userMessage = 'Autentikasi Midtrans Gagal (HTTP 401): Akses ditolak. Kredensial Server Key tidak valid atau mode Production/Sandbox tidak sesuai. Jika sedang mencoba tes, gunakan akun & kunci Sandbox (awalan SB-Mid-).';
+        const is401 = Boolean(error.message && error.message.includes('401'));
+        if (is401) {
+            userMessage = 'Autentikasi Midtrans Gagal (HTTP 401): Akses ditolak oleh Midtrans. Mohon periksa: (1) Pastikan MIDTRANS_SERVER_KEY dan mode Sandbox/Production sesuai. Jika untuk pengujian, gunakan akun Midtrans Sandbox (awalan SB-Mid-) dan MIDTRANS_IS_PRODUCTION=false. (2) Jika Production, pastikan merchant Midtrans sudah Aktif dan IP Whitelist di MAP (Settings > Access Keys) dikosongkan.';
         }
-        res.status(500).json({
+        res.status(400).json({
             success: false,
             message: userMessage,
-            rawError: error.message
+            rawError: error.message,
+            is401
         });
     }
 });
