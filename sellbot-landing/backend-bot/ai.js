@@ -16,7 +16,8 @@ async function generateAIResponse(userMessage, storeRules = "", products = [], h
                 const stok = p.stock ?? 'Tersedia';
                 const varian = p.variant ? ` | Varian: ${p.variant}` : '';
                 const desc = p.description ? ` | ${p.description}` : '';
-                return `- *${p.name || p.title}*: Rp ${harga} | Stok: ${stok}${varian}${desc}`;
+                const hasPhoto = p.image_url ? ' | Foto: Tersedia' : ' | Foto: Tidak ada';
+                return `- *${p.name || p.title}*: Rp ${harga} | Stok: ${stok}${varian}${desc}${hasPhoto}`;
             }).join('\n')
             : "Katalog produk belum diatur oleh admin toko.";
 
@@ -73,6 +74,17 @@ Jika SUDAH ada data order di history → JANGAN tanya lagi, gunakan data yang su
 === MENGHUBUNGKAN KE ADMIN ===
 Jika pelanggan meminta untuk berbicara dengan admin, CS, atau manusia, WAJIB awali jawabanmu dengan tag [FORWARD_TO_ADMIN].
 Contoh: "[FORWARD_TO_ADMIN] Baik kak, mohon tunggu sebentar ya. Pesan kakak sedang diteruskan ke admin kami 🙏"
+
+=== PERMINTAAN FOTO / GAMBAR PRODUK ===
+- Di katalog terdapat keterangan ketersediaan foto produk ("Foto: Tersedia" atau "Foto: Tidak ada").
+- Jika pelanggan meminta foto, gambar, atau realpict dari suatu produk (misal: "minta fotonya kak", "bisa lihat gambar?", "kirim foto barangnya dong", "ada fotonya?", "spill fotonya"):
+  1. Jika produk yang dimaksud berstatus "Foto: Tersedia":
+     Jawab dengan ramah dan informatif mengenai produk tersebut, dan WAJIB sertakan tag rahasia [SEND_IMAGE:nama_produk] di akhir balasanmu!
+     Contoh: "Ini kak foto untuk Kaos Premium-nya! Bahannya katun combed 30s adem dan nyaman dipakai kak 😊 [SEND_IMAGE:Kaos Premium]"
+  2. Jika pelanggan minta foto tapi tidak menyebut nama produk spesifik:
+     Periksa produk yang sedang dibahas di riwayat chat. Jika produk tersebut memiliki foto, kirimkan dengan tag [SEND_IMAGE:nama_produk].
+  3. Jika produk tersebut "Foto: Tidak ada":
+     Jelaskan dengan sopan bahwa foto produk tersebut belum tersedia di katalog saat ini. JANGAN gunakan tag [SEND_IMAGE].
 
 === MENGHITUNG TOTAL PESANAN ===
 - Jika pelanggan menanyakan total harga untuk pemesanan barang (misal: "10 pcs tiap produk total berapa?"), HITUNG TOTALNYA dengan benar (harga satuan x jumlah pesanan).
@@ -425,7 +437,7 @@ PILIHAN INTENT:
 2. "ASK_COD": Jika pengguna bertanya apakah bisa COD, bayar di tempat, atau sistem pembayarannya bagaimana.
 3. "CANCEL": Jika pengguna membatalkan pesanan (contoh: "batal", "cancel", "nggak jadi").
 4. "SELECT_COURIER": Jika pengguna memilih kurir (contoh: "JNE", "J&T") baik sendiri maupun bersamaan dengan nama/alamat penerima.
-5. "GENERAL": Selain dari yang di atas (contoh: ngobrol biasa, tanya produk, pesan barang HANYA menyebutkan nama produk tanpa alamat pengiriman).
+5. "GENERAL": Selain dari yang di atas (contoh: ngobrol biasa, tanya produk, minta foto/gambar produk, pesan barang HANYA menyebutkan nama produk tanpa alamat pengiriman).
 
 PENTING UNTUK LOKASI:
 Kamu WAJIB mengekstrak nama lokasi (kota/kecamatan) dari pesan pengguna jika dia menyebutkan alamat/tujuan pengiriman, untuk INTENT APA PUN (termasuk SELECT_COURIER, CHECK_SHIPPING, maupun GENERAL).

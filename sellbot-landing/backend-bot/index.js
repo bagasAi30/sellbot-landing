@@ -1288,9 +1288,120 @@ async function startWhatsAppBot(userId, onStatus) {
                 console.log(`📋 Deteksi format invoice otomatis dari teks AI`);
             }
 
-            // Kirim balasan ke WhatsApp pelanggan
-            await sock.sendMessage(senderJid, { text: aiReply });
-            console.log(`✅ Balas ke ${customerName}: ${aiReply.substring(0, 100)}`);
+            // =============================================
+            // CEK APAKAH PERLU KIRIM GAMBAR / FOTO PRODUK
+            // =============================================
+            let sendImageProduct = null;
+            const sendImageTagMatch = aiReply.match(/\[SEND_IMAGE:\s*([^\]]+)\]/i);
+            if (sendImageTagMatch) {
+                const prodQuery = sendImageTagMatch[1].trim().toLowerCase();
+                aiReply = aiReply.replace(/\[SEND_IMAGE:[^\]]+\]/gi, '').trim();
+                if (products && products.length > 0) {
+                    sendImageProduct = products.find(p => {
+                        const pName = (p.name || p.title || '').toLowerCase();
+                        const pId = String(p.id || '');
+                        return pName === prodQuery || pName.includes(prodQuery) || prodQuery.includes(pName) || pId === prodQuery;
+                    });
+                }
+            }
+
+            // Fallback: Jika pelanggan meminta foto/gambar tapi AI lupa sertakan tag [SEND_IMAGE]
+            const isAskingImage = /(?:minta|kirim|lihat|ada|spill|share|bagi|mau\s+lihat|tengok|liat)\s+(?:foto|gambar|pict|pic|realpict|realpic|fotonya|gambarnya)/i.test(lowerText) ||
+                /(?:foto|gambar|pict|pic|realpict|realpic)\s*(?:nya|dong|kak|ada|bisa|kah)/i.test(lowerText) ||
+                /^(?:foto|gambar|fotonya|gambarnya)\b/i.test(lowerText);
+
+            if (!sendImageProduct && isAskingImage && products && products.length > 0) {
+                console.log(`🖼️ Deteksi eksplisit permintaan foto/gambar dari teks: "${textMessage}"`);
+                // 1. Cari produk yang namanya disebut di pesan sekarang dan memiliki foto
+                sendImageProduct = products.find(p => {
+                    const pName = (p.name || p.title || '').toLowerCase();
+                    return pName.length > 2 && lowerText.includes(pName) && p.image_url;
+                });
+
+                // 2. Cari produk dari riwayat percakapan terbaru yang memiliki foto
+                if (!sendImageProduct && history && history.length > 0) {
+                    const recentContext = history.slice(-6).map(h => (h.message || '').toLowerCase()).join(' ');
+                    sendImageProduct = products.find(p => {
+                        const pName = (p.name || p.title || '').toLowerCase();
+                        return pName.length > 2 && recentContext.includes(pName) && p.image_url;
+                    });
+                }
+
+                // 3. Fallback: jika toko hanya punya 1 produk atau produk pertama yang memiliki foto
+                if (!sendImageProduct) {
+                    const prodsWithImg = products.filter(p => p.image_url);
+                    if (prodsWithImg.length === 1) {
+                        sendImageProduct = prodsWithImg[0];
+                    }
+                }
+            }
+
+            let imageSentSuccessfully = false;
+            if (sendImageProduct && sendImageProduct.image_url) {
+                const imgRaw = String(sendImageProduct.image_url).trim();
+                const prodNameDisplay = sendImageProduct.name || sendImageProduct.title || 'Produk';
+                console.log(`📸 Menyiapkan pengiriman media gambar untuk produk "${prodNameDisplay}" ke ${customerName}`);
+                let mediaPayload = null;
+
+                try {
+                    if (imgRaw.startsWith('data:image/')) {
+                        const base64Data = imgRaw.replace(/^data:image\/[a-zA-Z0-9\-\+\.]+;base64,/, '');
+                        const mimeMatch = imgRaw.match(/^data:(image\/[a-zA-Z0-9\-\+\.]+);base64,/);
+                        const mimetype = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+                        mediaPayload = {
+                            image: Buffer.from(base64Data, 'base64'),
+                            mimetype: mimetype
+                        };
+                    } else if (imgRaw.startsWith('http://') || imgRaw.startsWith('https://')) {
+                        mediaPayload = {
+                            image: { url: imgRaw }
+                        };
+                    } else {
+                        // File lokal di folder publik / project
+                        const possiblePaths = [
+                            path.join(frontendPath, imgRaw.replace(/^\//, '')),
+                            path.join(__dirname, '..', imgRaw.replace(/^\//, '')),
+                            path.join(__dirname, 'public', imgRaw.replace(/^\//, '')),
+                            path.join(__dirname, '../..', imgRaw.replace(/^\//, ''))
+                        ];
+                        for (const fp of possiblePaths) {
+                            if (fs.existsSync(fp)) {
+                                mediaPayload = {
+                                    image: fs.readFileSync(fp),
+                                    mimetype: 'image/jpeg'
+                                };
+                                break;
+                            }
+                        }
+                    }
+
+                    if (mediaPayload) {
+                        if (aiReply && aiReply.length <= 1000) {
+                            mediaPayload.caption = aiReply;
+                            await sock.sendMessage(senderJid, mediaPayload);
+                            imageSentSuccessfully = true;
+                        } else {
+                            mediaPayload.caption = `Foto produk *${prodNameDisplay}* kak 😊`;
+                            await sock.sendMessage(senderJid, mediaPayload);
+                            if (aiReply) {
+                                await sock.sendMessage(senderJid, { text: aiReply });
+                            }
+                            imageSentSuccessfully = true;
+                        }
+                        console.log(`✅ Gambar produk "${prodNameDisplay}" berhasil dikirim ke ${customerName}`);
+                    } else {
+                        console.warn(`⚠️ Path media gambar tidak ditemukan untuk "${prodNameDisplay}": ${imgRaw.substring(0, 50)}`);
+                    }
+                } catch (mediaErr) {
+                    console.error(`⚠️ Gagal mengirim media gambar via Baileys:`, mediaErr.message);
+                }
+            }
+
+            // Kirim balasan teks ke WhatsApp jika gambar belum/gagal dikirim dengan caption
+            if (!imageSentSuccessfully) {
+                await sock.sendMessage(senderJid, { text: aiReply });
+                console.log(`✅ Balas ke ${customerName}: ${aiReply.substring(0, 100)}`);
+            }
 
             // Logika forward ke Admin (Bantuan/Handover)
             if (isForwardToAdmin) {

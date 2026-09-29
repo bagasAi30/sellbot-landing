@@ -238,6 +238,157 @@
 
         <!-- Knowledge Base Section -->
         <section id="knowledge" class="dashboard-section">
+
+            <!-- Card: WhatsApp Integration (Di Bagian Atas) -->
+            <div class="kb-card wa-card" style="margin-bottom: 24px;">
+                <div class="kb-card-header">
+                    <div class="kb-card-title-group">
+                        <div class="kb-card-icon wa-icon">
+                            <i class="ph-fill ph-whatsapp-logo"></i>
+                        </div>
+                        <div>
+                            <h3 class="kb-card-title">Integrasi WhatsApp</h3>
+                            <p class="kb-card-subtitle">Hubungkan bot AI ke nomor WhatsApp toko via scan QR atau kode pairing nomor HP</p>
+                        </div>
+                    </div>
+                    <div id="waConnectionBadge" class="wa-status-badge disconnected">
+                        <span class="wa-status-dot"></span>
+                        <span class="wa-status-text">Memeriksa...</span>
+                    </div>
+                </div>
+
+                <!-- Pairing Method Selector Tabs -->
+                <div class="wa-method-tabs">
+                    <button type="button" class="wa-tab-btn active" id="tabMethodQR" data-method="qr">
+                        <i class="ph ph-qr-code"></i>
+                        <span>Scan QR Code</span>
+                    </button>
+                    <button type="button" class="wa-tab-btn" id="tabMethodPhone" data-method="phone">
+                        <i class="ph ph-phone-call"></i>
+                        <span>Nomor HP (Pairing Code)</span>
+                        <span class="wa-tab-badge">Baru</span>
+                    </button>
+                </div>
+
+                <!-- Steps Guide: QR Mode -->
+                <div id="guideQR" class="kb-steps-box">
+                    <div class="kb-steps-title">
+                        <i class="ph-fill ph-list-numbers"></i>
+                        Tahapan Menautkan Bot via QR Code
+                    </div>
+                    <ol class="kb-steps-list">
+                        <li>Pastikan server backend SellBot AI sudah berjalan.</li>
+                        <li>Buka aplikasi <strong>WhatsApp</strong> di HP Anda.</li>
+                        <li>Masuk ke <strong>Perangkat Tertaut</strong> (Android: Titik Tiga — iOS: Pengaturan).</li>
+                        <li>Tekan <strong>Tautkan Perangkat</strong>, lalu arahkan kamera ke QR Code di bawah.</li>
+                        <li>Setelah tersambung, bot akan aktif otomatis membalas pesan pelanggan 🎉</li>
+                    </ol>
+                </div>
+
+                <!-- Steps Guide: Phone Pairing Code Mode -->
+                <div id="guidePhone" class="kb-steps-box wa-guide-phone" style="display: none;">
+                    <div class="kb-steps-title" style="color: #15803D;">
+                        <i class="ph-fill ph-device-mobile"></i>
+                        Tahapan Menautkan Bot via Nomor HP (Tanpa Kamera)
+                    </div>
+                    <ol class="kb-steps-list" style="color: #166534;">
+                        <li>Masukkan nomor WhatsApp toko Anda pada kolom di bawah (contoh: <code>081234567890</code>).</li>
+                        <li>Klik tombol <strong>"Dapatkan Kode Pairing"</strong> untuk menerima 8 digit kode pairing.</li>
+                        <li>Buka aplikasi <strong>WhatsApp</strong> di HP Anda > <strong>Perangkat Tertaut</strong>.</li>
+                        <li>Pilih <strong>Tautkan Perangkat</strong>, lalu ketuk tautan di bawah: <strong>"Tautkan dengan nomor telepon saja"</strong>.</li>
+                        <li>Masukkan 8 digit kode pairing yang tampil di layar. WhatsApp langsung terhubung! 🎉</li>
+                    </ol>
+                </div>
+
+                <!-- QR + Controls Layout -->
+                <div class="wa-main-layout">
+                    <!-- QR / Pairing Code Display Panel -->
+                    <div class="wa-qr-panel">
+                        <div id="waQrLoading" class="wa-qr-state" style="display:none;">
+                            <i class="ph ph-circle-notch" style="font-size:36px;color:var(--primary);animation:spin 1s linear infinite;"></i>
+                            <span id="waQrLoadingText">Memuat QR Code...</span>
+                        </div>
+                        <img id="waQrImage" src="" alt="WhatsApp QR Code" class="wa-qr-img" style="display:none;" />
+                        
+                        <!-- Pairing Code Display Area -->
+                        <div id="waPairingBox" class="wa-pairing-box" style="display:none;">
+                            <div class="wa-pairing-label">Kode Pairing WhatsApp Anda:</div>
+                            <div class="wa-pairing-code-display" id="waPairingCodeText">---- ----</div>
+                            <button type="button" class="btn btn-outline btn-small wa-btn-copy" id="btnCopyPairingCode">
+                                <i class="ph ph-copy"></i> <span id="copyBtnText">Salin Kode</span>
+                            </button>
+                            <div class="wa-pairing-expiry-hint">
+                                <i class="ph ph-clock"></i> Masukkan kode ini di WhatsApp dalam 2 menit
+                            </div>
+                        </div>
+
+                        <div id="waConnectedState" class="wa-qr-state" style="display:none;color:#22c55e;">
+                            <i class="ph-fill ph-check-circle" style="font-size:52px;"></i>
+                            <strong>WhatsApp Terhubung!</strong>
+                            <span style="font-size:12px;color:var(--text-secondary);">Bot aktif & siap melayani pelanggan</span>
+                        </div>
+                        <div id="waDisconnectedState" class="wa-qr-state">
+                            <i class="ph ph-qr-code" style="font-size:44px;opacity:0.3;"></i>
+                            <span id="waDisconnectedMsg">Klik "Jalankan Bot" untuk generate QR</span>
+                        </div>
+                    </div>
+
+                    <!-- Controls Panel -->
+                    <div class="wa-controls-panel">
+                        <!-- Phone Number Input Section (Only in Phone Mode) -->
+                        <div id="waPhoneInputSection" class="wa-phone-input-section" style="display: none;">
+                            <label class="wa-field-label">
+                                Nomor WhatsApp Toko
+                            </label>
+                            <div class="wa-phone-input-group">
+                                <span class="wa-phone-prefix">🇮🇩 +62</span>
+                                <input type="tel" id="inputWaPairPhone" class="form-control wa-phone-input" placeholder="812-3456-7890 (atau 0812...)" autocomplete="tel">
+                            </div>
+                            <span class="kb-hint" style="margin-top: 5px; display: block; font-size: 12px;">
+                                <i class="ph ph-info"></i> Masukkan nomor WhatsApp yang aktif di HP Anda.
+                            </span>
+                        </div>
+
+                        <div class="wa-toggle-row">
+                            <div class="wa-toggle-info">
+                                <span class="wa-toggle-label">Auto-Reply AI Bot</span>
+                                <span class="wa-toggle-desc">Aktifkan/nonaktifkan balasan otomatis AI ke pelanggan.</span>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggleBotActive" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="wa-action-btns">
+                            <!-- Button in QR mode -->
+                            <button type="button" class="btn wa-btn-run" id="btnRunBot">
+                                <i class="ph-fill ph-play"></i> Jalankan Bot (QR)
+                            </button>
+                            <!-- Button in Phone mode -->
+                            <button type="button" class="btn btn-primary" id="btnGetPairingCode" style="display: none;">
+                                <i class="ph-fill ph-key"></i> Dapatkan Kode Pairing
+                            </button>
+                            <button type="button" class="btn wa-btn-stop" id="btnStopBot" title="Matikan Sementara">
+                                <i class="ph-fill ph-stop-circle"></i> Matikan Bot
+                            </button>
+                            <button type="button" class="btn btn-outline" id="btnRelinkBot" title="Keluar / Tautkan Ulang" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.3);">
+                                <i class="ph ph-plugs"></i> Tautkan Ulang
+                            </button>
+                            <button type="button" class="btn btn-outline wa-btn-refresh" id="btnRefreshQR" title="Refresh Status">
+                                <i class="ph ph-arrows-clockwise"></i>
+                            </button>
+                        </div>
+
+                        <div id="botStatusMessage" class="wa-status-msg">
+                            <i class="ph ph-info"></i>
+                            <span>Pilih metode penautan untuk menghubungkan bot ke nomor WhatsApp toko.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Header Knowledge Base Produk & Tombol Aksi (Di Bawah Integrasi WA) -->
             <header class="section-header">
                 <h2>Knowledge Base Produk</h2>
                 <div class="header-actions">
@@ -279,155 +430,6 @@
 
             <!-- Settings & Configuration Cards -->
             <div class="kb-config-grid">
-
-                <!-- Card: WhatsApp Integration -->
-                <div class="kb-card wa-card">
-                    <div class="kb-card-header">
-                        <div class="kb-card-title-group">
-                            <div class="kb-card-icon wa-icon">
-                                <i class="ph-fill ph-whatsapp-logo"></i>
-                            </div>
-                            <div>
-                                <h3 class="kb-card-title">Integrasi WhatsApp</h3>
-                                <p class="kb-card-subtitle">Hubungkan bot AI ke nomor WhatsApp toko via scan QR atau kode pairing nomor HP</p>
-                            </div>
-                        </div>
-                        <div id="waConnectionBadge" class="wa-status-badge disconnected">
-                            <span class="wa-status-dot"></span>
-                            <span class="wa-status-text">Memeriksa...</span>
-                        </div>
-                    </div>
-
-                    <!-- Pairing Method Selector Tabs -->
-                    <div class="wa-method-tabs">
-                        <button type="button" class="wa-tab-btn active" id="tabMethodQR" data-method="qr">
-                            <i class="ph ph-qr-code"></i>
-                            <span>Scan QR Code</span>
-                        </button>
-                        <button type="button" class="wa-tab-btn" id="tabMethodPhone" data-method="phone">
-                            <i class="ph ph-phone-call"></i>
-                            <span>Nomor HP (Pairing Code)</span>
-                            <span class="wa-tab-badge">Baru</span>
-                        </button>
-                    </div>
-
-                    <!-- Steps Guide: QR Mode -->
-                    <div id="guideQR" class="kb-steps-box">
-                        <div class="kb-steps-title">
-                            <i class="ph-fill ph-list-numbers"></i>
-                            Tahapan Menautkan Bot via QR Code
-                        </div>
-                        <ol class="kb-steps-list">
-                            <li>Pastikan server backend SellBot AI sudah berjalan.</li>
-                            <li>Buka aplikasi <strong>WhatsApp</strong> di HP Anda.</li>
-                            <li>Masuk ke <strong>Perangkat Tertaut</strong> (Android: Titik Tiga — iOS: Pengaturan).</li>
-                            <li>Tekan <strong>Tautkan Perangkat</strong>, lalu arahkan kamera ke QR Code di bawah.</li>
-                            <li>Setelah tersambung, bot akan aktif otomatis membalas pesan pelanggan 🎉</li>
-                        </ol>
-                    </div>
-
-                    <!-- Steps Guide: Phone Pairing Code Mode -->
-                    <div id="guidePhone" class="kb-steps-box wa-guide-phone" style="display: none;">
-                        <div class="kb-steps-title" style="color: #15803D;">
-                            <i class="ph-fill ph-device-mobile"></i>
-                            Tahapan Menautkan Bot via Nomor HP (Tanpa Kamera)
-                        </div>
-                        <ol class="kb-steps-list" style="color: #166534;">
-                            <li>Masukkan nomor WhatsApp toko Anda pada kolom di bawah (contoh: <code>081234567890</code>).</li>
-                            <li>Klik tombol <strong>"Dapatkan Kode Pairing"</strong> untuk menerima 8 digit kode pairing.</li>
-                            <li>Buka aplikasi <strong>WhatsApp</strong> di HP Anda > <strong>Perangkat Tertaut</strong>.</li>
-                            <li>Pilih <strong>Tautkan Perangkat</strong>, lalu ketuk tautan di bawah: <strong>"Tautkan dengan nomor telepon saja"</strong>.</li>
-                            <li>Masukkan 8 digit kode pairing yang tampil di layar. WhatsApp langsung terhubung! 🎉</li>
-                        </ol>
-                    </div>
-
-                    <!-- QR + Controls Layout -->
-                    <div class="wa-main-layout">
-                        <!-- QR / Pairing Code Display Panel -->
-                        <div class="wa-qr-panel">
-                            <div id="waQrLoading" class="wa-qr-state" style="display:none;">
-                                <i class="ph ph-circle-notch" style="font-size:36px;color:var(--primary);animation:spin 1s linear infinite;"></i>
-                                <span id="waQrLoadingText">Memuat QR Code...</span>
-                            </div>
-                            <img id="waQrImage" src="" alt="WhatsApp QR Code" class="wa-qr-img" style="display:none;" />
-                            
-                            <!-- Pairing Code Display Area -->
-                            <div id="waPairingBox" class="wa-pairing-box" style="display:none;">
-                                <div class="wa-pairing-label">Kode Pairing WhatsApp Anda:</div>
-                                <div class="wa-pairing-code-display" id="waPairingCodeText">---- ----</div>
-                                <button type="button" class="btn btn-outline btn-small wa-btn-copy" id="btnCopyPairingCode">
-                                    <i class="ph ph-copy"></i> <span id="copyBtnText">Salin Kode</span>
-                                </button>
-                                <div class="wa-pairing-expiry-hint">
-                                    <i class="ph ph-clock"></i> Masukkan kode ini di WhatsApp dalam 2 menit
-                                </div>
-                            </div>
-
-                            <div id="waConnectedState" class="wa-qr-state" style="display:none;color:#22c55e;">
-                                <i class="ph-fill ph-check-circle" style="font-size:52px;"></i>
-                                <strong>WhatsApp Terhubung!</strong>
-                                <span style="font-size:12px;color:var(--text-secondary);">Bot aktif & siap melayani pelanggan</span>
-                            </div>
-                            <div id="waDisconnectedState" class="wa-qr-state">
-                                <i class="ph ph-qr-code" style="font-size:44px;opacity:0.3;"></i>
-                                <span id="waDisconnectedMsg">Klik "Jalankan Bot" untuk generate QR</span>
-                            </div>
-                        </div>
-
-                        <!-- Controls Panel -->
-                        <div class="wa-controls-panel">
-                            <!-- Phone Number Input Section (Only in Phone Mode) -->
-                            <div id="waPhoneInputSection" class="wa-phone-input-section" style="display: none;">
-                                <label class="wa-field-label">
-                                    Nomor WhatsApp Toko
-                                </label>
-                                <div class="wa-phone-input-group">
-                                    <span class="wa-phone-prefix">🇮🇩 +62</span>
-                                    <input type="tel" id="inputWaPairPhone" class="form-control wa-phone-input" placeholder="812-3456-7890 (atau 0812...)" autocomplete="tel">
-                                </div>
-                                <span class="kb-hint" style="margin-top: 5px; display: block; font-size: 12px;">
-                                    <i class="ph ph-info"></i> Masukkan nomor WhatsApp yang aktif di HP Anda.
-                                </span>
-                            </div>
-
-                            <div class="wa-toggle-row">
-                                <div class="wa-toggle-info">
-                                    <span class="wa-toggle-label">Auto-Reply AI Bot</span>
-                                    <span class="wa-toggle-desc">Aktifkan/nonaktifkan balasan otomatis AI ke pelanggan.</span>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="toggleBotActive" checked>
-                                    <span class="slider"></span>
-                                </label>
-                            </div>
-
-                            <div class="wa-action-btns">
-                                <!-- Button in QR mode -->
-                                <button type="button" class="btn wa-btn-run" id="btnRunBot">
-                                    <i class="ph-fill ph-play"></i> Jalankan Bot (QR)
-                                </button>
-                                <!-- Button in Phone mode -->
-                                <button type="button" class="btn btn-primary" id="btnGetPairingCode" style="display: none;">
-                                    <i class="ph-fill ph-key"></i> Dapatkan Kode Pairing
-                                </button>
-                                <button type="button" class="btn wa-btn-stop" id="btnStopBot" title="Matikan Sementara">
-                                    <i class="ph-fill ph-stop-circle"></i> Matikan Bot
-                                </button>
-                                <button type="button" class="btn btn-outline" id="btnRelinkBot" title="Keluar / Tautkan Ulang" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.3);">
-                                    <i class="ph ph-plugs"></i> Tautkan Ulang
-                                </button>
-                                <button type="button" class="btn btn-outline wa-btn-refresh" id="btnRefreshQR" title="Refresh Status">
-                                    <i class="ph ph-arrows-clockwise"></i>
-                                </button>
-                            </div>
-
-                            <div id="botStatusMessage" class="wa-status-msg">
-                                <i class="ph ph-info"></i>
-                                <span>Pilih metode penautan untuk menghubungkan bot ke nomor WhatsApp toko.</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
                 <!-- Card: AI Persona -->
                 <div class="kb-card">
