@@ -2,6 +2,7 @@
 require('dotenv').config();
 const Groq = require('groq-sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const axios = require('axios');
 
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
@@ -195,14 +196,53 @@ PENTING: JANGAN PERNAH MENGGUNAKAN TAG <think>! Jawab langsung. Pastikan tidak a
     }
 }
 
+async function processImageWithOpenRouter(base64Image, mimeType, prompt) {
+    const key = process.env.OPENROUTER_API_KEY;
+    if (!key) return null;
+
+    try {
+        const imageUrl = `data:${mimeType};base64,${base64Image}`;
+        const res = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+            model: 'google/gemini-2.5-flash',
+            max_tokens: 350,
+            messages: [
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: prompt },
+                        { type: 'image_url', image_url: { url: imageUrl } }
+                    ]
+                }
+            ]
+        }, {
+            headers: {
+                'Authorization': `Bearer ${key}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://asistenlapakai.my.id',
+                'X-Title': 'AsistenLapak AI'
+            },
+            timeout: 25000
+        });
+
+        const reply = res.data?.choices?.[0]?.message?.content?.trim();
+        return reply || null;
+    } catch (err) {
+        console.error("Error pada processImageWithOpenRouter:", err.response?.data?.error?.message || err.message);
+        return null;
+    }
+}
+
 async function processImageWithGemini(base64Image, mimeType, caption = "", storeRules = "", products = [], history = []) {
     try {
-        if (!genAI) {
-            console.warn("GEMINI_API_KEY belum dikonfigurasi di .env");
-            return "Maaf kak, fitur baca gambar belum diaktifkan (API Key kurang). Bisa diketik aja? 🙏";
-        }
-
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        // Format katalog produk
+        const productCatalog = products && products.length > 0
+            ? products.map(p => {
+                const harga = Number(p.price || 0).toLocaleString('id-ID');
+                const stok = p.stock ?? 'Tersedia';
+                const varian = p.variant ? ` | Varian: ${p.variant}` : '';
+                return `- *${p.name || p.title}*: Rp ${harga} | Stok: ${stok}${varian}`;
+            }).join('\n')
+            : "";
 
         // Format history
         const formattedHistory = history
@@ -211,41 +251,63 @@ async function processImageWithGemini(base64Image, mimeType, caption = "", store
             .map(item => `[${item.sender.toUpperCase()}]: ${item.message}`)
             .join('\n');
 
-        const prompt = `Kamu adalah CS WhatsApp yang ramah. Pelanggan baru saja mengirimkan sebuah gambar.
+        const prompt = `Kamu adalah CS WhatsApp yang ramah dari sebuah toko online. Pelanggan baru saja mengirimkan sebuah gambar.
 Teks/Caption dari gambar ini: "${caption}"
 
-Riwayat chat terakhir (sebagai konteks):
+${storeRules ? `=== ATURAN TOKO ===\n${storeRules}\n\n` : ''}${productCatalog ? `=== KATALOG PRODUK ===\n${productCatalog}\n\n` : ''}Riwayat chat terakhir (sebagai konteks):
 ${formattedHistory}
 
 Tugasmu:
 1. Analisis gambar ini. Jika ini adalah BUKTI TRANSFER / BUKTI PEMBAYARAN: 
    - Ekstrak nominal uang yang ditransfer dari gambar (hanya angkanya, hilangkan titik/koma/Rp).
    - Ucapkan terima kasih dan konfirmasi bahwa bukti bayar sedang dicek.
-   - WAJIB tambahkan tag rahasia ini di akhir jawabanmu: [VALID_RECEIPT:nominal_angka] (contoh: [VALID_RECEIPT:150000]).
-2. Jika ini adalah GAMBAR PRODUK / BARANG: Berikan tanggapan yang relevan sebagai CS toko.
-3. Jawab dengan bahasa Indonesia santai (pakai "kak", boleh pakai emoji). Maksimal 3 kalimat.
+   - WAJIB tambahkan tag rahasia ini di akhir jawabanmu: [VALID_RECEIPT:nominal_angka] (contoh: [VALID_RECEIPT:99000]).
+   - Jika ini bukti transfer, WAJIB sertakan tag [FORWARD_TO_ADMIN] agar admin segera memverifikasi.
+2. Jika ini adalah GAMBAR PRODUK / BARANG (baju, pakaian, kendaraan, motor, mobil, gadget, makanan, atau barang lain):
+   - Jelaskan barang apa yang ada di gambar (warna, model, atau tipenya) dan hubungkan dengan katalog toko bila sesuai.
+   - Tanggapi dengan ramah dan tanyakan apakah ingin memesan, cek ukuran/tipe, atau ada info lain yang ingin diketahui.
+3. Jawab dengan bahasa Indonesia santai, sopan, dan hangat (pakai "kak", boleh pakai emoji). Maksimal 3 kalimat.
 4. Jawab LANGSUNG sebagai balasan ke pelanggan. Jangan beri pengantar "Ini jawaban saya:".
 5. Jika pelanggan meminta untuk berbicara dengan admin, CS, atau manusia, WAJIB awali jawabanmu dengan tag [FORWARD_TO_ADMIN].
 
 Jawabanmu:`;
 
-        const imagePart = {
-            inlineData: {
-                data: base64Image,
-                mimeType: mimeType
+        // 1. Coba lewat OpenRouter jika API Key tersedia
+        if (process.env.OPENROUTER_API_KEY) {
+            const openRouterReply = await processImageWithOpenRouter(base64Image, mimeType, prompt);
+            if (openRouterReply) {
+                return openRouterReply;
             }
-        };
+        }
 
-        const result = await model.generateContent([prompt, imagePart]);
-        const response = await result.response;
-        let text = response.text().trim();
-        return text || "Terima kasih gambarnya kak, akan segera kami cek ya! 🙏";
+        // 2. Fallback ke Google Gemini langsung jika OpenRouter belum dikonfigurasi / gagal
+        if (genAI) {
+            try {
+                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const imagePart = {
+                    inlineData: {
+                        data: base64Image,
+                        mimeType: mimeType
+                    }
+                };
+                const result = await model.generateContent([prompt, imagePart]);
+                const response = await result.response;
+                let text = response.text().trim();
+                if (text) return text;
+            } catch (geminiErr) {
+                console.error("Gemini native error:", geminiErr.message);
+            }
+        }
+
+        // 3. Fallback ramah jika kedua layanan sedang tidak merespon
+        return "[FORWARD_TO_ADMIN] Terima kasih banyak fotonya kak! 🙏\n\nFoto kakak sudah kami terima dan sedang kami teruskan ke admin kami untuk dicek dan dibantu lebih lanjut ya kak. Mohon ditunggu sebentar 😊";
 
     } catch (error) {
         console.error("Error pada processImageWithGemini:", error.message);
-        return "Maaf kak, sistem kami gagal membaca gambarnya. Bisa tolong dijelaskan? 🙏";
+        return "[FORWARD_TO_ADMIN] Terima kasih banyak fotonya kak! 🙏\n\nFoto kakak sudah kami terima dan sedang kami teruskan ke admin kami untuk dicek dan dibantu lebih lanjut ya kak. Mohon ditunggu sebentar 😊";
     }
 }
+
 
 // Daftar kata-kata umum / stop words yang TIDAK BOLEH dianggap sebagai nama lokasi
 const LOCATION_STOP_WORDS = new Set([

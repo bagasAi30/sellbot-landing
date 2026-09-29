@@ -681,7 +681,7 @@ async function startWhatsAppBot(userId, onStatus) {
                     return; // Stop eksekusi agar tidak lanjut ke Groq / Regex
                 } catch (err) {
                     console.error("Gagal memproses gambar:", err);
-                    aiReply = "Maaf kak, sistem kami gagal membaca gambarnya. Bisa diketik saja? 🙏";
+                    aiReply = "Terima kasih fotonya ya kak! 🙏 Sedang kami teruskan ke admin kami untuk dicek dan dibantu ya kak. Mohon ditunggu sebentar 😊";
                     await sock.sendMessage(senderJid, { text: aiReply });
                     return;
                 }
