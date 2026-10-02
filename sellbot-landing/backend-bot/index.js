@@ -390,13 +390,13 @@ async function startWhatsAppBot(userId, onStatus) {
         },
         logger,
         printQRInTerminal: true,
-        browser: Browsers.ubuntu('Chrome'),
+        browser: Browsers.macOS('Desktop'),
         syncFullHistory: false,
-        markOnlineOnConnect: false,
+        markOnlineOnConnect: true,
         generateHighQualityLinkPreview: false,
         defaultQueryTimeoutMs: 60000,
         connectTimeoutMs: 60000,
-        keepAliveIntervalMs: 30000
+        keepAliveIntervalMs: 15000
     });
 
     activeSessions[userId] = { sock: sock, status: 'CONNECTING', qr: null, pairingCode: null, customers: {} };
@@ -424,9 +424,13 @@ async function startWhatsAppBot(userId, onStatus) {
             const shouldReconnect = !isLoggedOut && !sock.isManuallyStopped;
             console.log(`Koneksi tertutup untuk ${userId}. Status: ${statusCode}, Reconnect: ${shouldReconnect}`);
             
-            delete activeSessions[userId];
+            if (activeSessions[userId]) {
+                // Jangan reset ke DISCONNECTED jika WhatsApp sedang melakukan restart handshake pairing (515)
+                activeSessions[userId].status = statusCode === DisconnectReason.restartRequired ? 'CONNECTING' : 'DISCONNECTED';
+            }
 
             if (isLoggedOut) {
+                delete activeSessions[userId];
                 console.log(`Sesi user ${userId} telah keluar (logged out), membersihkan direktori auth...`);
                 try {
                     if (fs.existsSync(sessionDir)) {
@@ -436,17 +440,25 @@ async function startWhatsAppBot(userId, onStatus) {
                     console.warn('Gagal membersihkan direktori auth:', rmErr.message);
                 }
             } else if (shouldReconnect) {
-                // Jika restartRequired (515), reconnect instan (500ms) agar WhatsApp di HP tidak timeout saat menautkan
-                const reconnectDelay = statusCode === DisconnectReason.restartRequired ? 500 : 5000;
+                // Jika restartRequired (515), reconnect cepat (300ms) agar WhatsApp di HP tidak timeout saat menautkan
+                const reconnectDelay = statusCode === DisconnectReason.restartRequired ? 300 : 3000;
                 setTimeout(() => {
-                    startWhatsAppBot(userId);
+                    startWhatsAppBot(userId, onStatus);
                 }, reconnectDelay);
+            } else {
+                delete activeSessions[userId];
             }
         } else if (connection === 'open') {
             if (activeSessions[userId]) {
                 activeSessions[userId].status = 'CONNECTED';
                 activeSessions[userId].qr = null;
                 activeSessions[userId].pairingCode = null;
+            }
+            try {
+                // Set bot status Online/Available agar WhatsApp memprioritaskan pengiriman chat
+                await sock.sendPresenceUpdate('available');
+            } catch (pErr) {
+                // ignore
             }
             console.log(`✅ WhatsApp terhubung untuk user: ${userId}`);
             if (onStatus) onStatus({ type: 'connected' });
@@ -482,6 +494,13 @@ async function startWhatsAppBot(userId, onStatus) {
                 continue;
             }
             console.log(`[DEBUG] ✅ Pesan diterima (${now - (msgTimestamp || now)}s ago) dari ${msg.key?.remoteJid}`);
+
+            // Kirim read receipt / tanda terima ke server WhatsApp agar status centang 1 langsung berubah jadi centang 2
+            try {
+                await sock.readMessages([msg.key]);
+            } catch (ackErr) {
+                // Abaikan jika gagal kirim ack
+            }
 
             // Unwrap pesan dengan aman menggunakan helper bawaan Baileys
             const msgContent = extractMessageContent(msg.message);
@@ -763,9 +782,46 @@ async function startWhatsAppBot(userId, onStatus) {
 
                         if (orderExtract) {
                             const targetLokasi = orderExtract.lokasi_ongkir || queryLokasiBaru || custSession.lastDestination?.destLabel;
-                            let shippingRates = null;
                             let destLabel = targetLokasi || custSession.lastDestination?.destLabel || '-';
                             let destId = custSession.lastDestination?.destId || null;
+
+                            const qtyParsed = Number(orderExtract.qty) || 1;
+                            const unitName = orderExtract.unit || (qtyParsed > 1 ? 'paket' : 'pcs');
+                            const namaProd = orderExtract.produk || 'Produk';
+                            let totalB = Number(orderExtract.total_harga_barang) || 0;
+                            let unitWeight = 1000;
+
+                            // Cari harga dan berat asli dari database products
+                            if (products && products.length > 0) {
+                                const matchedProduct = products.find(p => {
+                                    const pName = (p.name || p.title || '').toLowerCase();
+                                    return pName.length > 2 && (namaProd.toLowerCase().includes(pName) || pName.includes(namaProd.toLowerCase()));
+                                });
+                                if (matchedProduct) {
+                                    const hrgSatuan = Number(matchedProduct.price || 0);
+                                    if (hrgSatuan > 0) {
+                                        totalB = hrgSatuan * qtyParsed;
+                                    }
+                                    if (matchedProduct.weight) {
+                                        unitWeight = matchedProduct.weight;
+                                    }
+                                } else {
+                                    // Fallback jika tidak match persis
+                                    const aiPrice = Number(orderExtract.total_harga_barang) || 0;
+                                    const firstProductPrice = Number(products[0].price || 0);
+                                    // Cek apakah AI mungkin mengembalikan harga satuan
+                                    if (aiPrice === firstProductPrice) {
+                                         totalB = firstProductPrice * qtyParsed;
+                                    } else if (aiPrice > 0 && aiPrice < 50000 && qtyParsed >= 10 && aiPrice === (totalB / qtyParsed)) {
+                                         // Jika totalB sudah sesuai, tidak perlu diubah.
+                                    } else if (aiPrice > 0 && aiPrice < 50000 && qtyParsed >= 10) {
+                                         totalB = aiPrice * qtyParsed;
+                                    }
+                                }
+                            }
+
+                            const orderBeratGram = Math.max(1000, qtyParsed * unitWeight);
+                            let shippingRates = null;
 
                             if (targetLokasi && targetLokasi.length >= 3) {
                                 try {
@@ -774,8 +830,7 @@ async function startWhatsAppBot(userId, onStatus) {
                                         const target = destinations[0];
                                         destId = target.id || target.subdistrict_id || target.city_id;
                                         destLabel = target.label || targetLokasi;
-                                        const beratGram = Math.max(1000, (orderExtract.qty || 1) * 1000);
-                                        shippingRates = await calculateShipping(destId, beratGram);
+                                        shippingRates = await calculateShipping(destId, orderBeratGram);
                                     }
                                 } catch (sErr) {
                                     console.warn('⚠️ Gagal hitung tarif ongkir:', sErr.message);
@@ -784,8 +839,7 @@ async function startWhatsAppBot(userId, onStatus) {
 
                             if (!shippingRates && destId) {
                                 try {
-                                    const beratGram = Math.max(1000, (orderExtract.qty || 1) * 1000);
-                                    shippingRates = await calculateShipping(destId, beratGram);
+                                    shippingRates = await calculateShipping(destId, orderBeratGram);
                                 } catch (e) {}
                             }
 
@@ -795,11 +849,6 @@ async function startWhatsAppBot(userId, onStatus) {
                                 else if (k.includes('jne')) kurirDipilih = 'JNE REG';
                             }
 
-                            const qtyParsed = Number(orderExtract.qty) || 1;
-                            const unitName = orderExtract.unit || (qtyParsed > 1 ? 'paket' : 'pcs');
-                            const namaProd = orderExtract.produk || 'Produk';
-                            const totalB = Number(orderExtract.total_harga_barang) || 0;
-
                             custSession.pendingOrder = {
                                 produk: `${namaProd} x ${qtyParsed} ${unitName}`,
                                 qty: qtyParsed,
@@ -807,7 +856,7 @@ async function startWhatsAppBot(userId, onStatus) {
                                 namaPenerima: orderExtract.nama_penerima || customerName,
                                 alamat: orderExtract.alamat || destLabel,
                                 destLabel: destLabel,
-                                orderBeratKg: Math.ceil(Math.max(1000, qtyParsed * 1000) / 1000),
+                                orderBeratKg: Math.ceil(orderBeratGram / 1000),
                                 shippingRates: shippingRates || []
                             };
                             pendingOrder = custSession.pendingOrder;
@@ -1563,28 +1612,48 @@ async function startWhatsAppBot(userId, onStatus) {
             }
 
             try {
-                // Jika belum ada sesi atau sesi sebelumnya tertutup / tidak ada socket, mulai bot
-                if (!activeSessions[userId] || !activeSessions[userId].sock) {
-                    await startWhatsAppBot(userId);
+                // Jika sudah terkoneksi, tidak perlu pairing ulang
+                if (activeSessions[userId]?.status === 'CONNECTED' && activeSessions[userId]?.sock) {
+                    return res.json({ status: 'CONNECTED', message: 'WhatsApp sudah terhubung!' });
                 }
+
+                // Untuk pairing nomor baru yang bersih, matikan sesi berjalan sebelumnya dan bersihkan auth lama jika belum terkoneksi
+                if (activeSessions[userId] && activeSessions[userId].sock) {
+                    try {
+                        activeSessions[userId].sock.isManuallyStopped = true;
+                        if (activeSessions[userId].sock.ws) activeSessions[userId].sock.ws.close();
+                    } catch (e) {
+                        // ignore
+                    }
+                    delete activeSessions[userId];
+                }
+
+                const sessionDir = path.join(__dirname, `auth_info_${userId}`);
+                if (fs.existsSync(sessionDir)) {
+                    try {
+                        fs.rmSync(sessionDir, { recursive: true, force: true });
+                        console.log(`[INFO] Sesi lama user ${userId} dibersihkan untuk pairing code baru nomor ${cleanNumber}`);
+                    } catch (rmErr) {
+                        console.warn('[WARN] Gagal membersihkan sessionDir lama:', rmErr.message);
+                    }
+                }
+
+                // Mulai bot baru dengan sesi fresh
+                await startWhatsAppBot(userId);
 
                 const session = activeSessions[userId];
                 if (!session || !session.sock) {
                     return res.status(500).json({ error: 'Gagal menginisialisasi sesi bot WhatsApp' });
                 }
 
-                if (session.status === 'CONNECTED') {
-                    return res.json({ status: 'CONNECTED', message: 'WhatsApp sudah terhubung!' });
-                }
-
                 // Tunggu hingga WebSocket Baileys membuka koneksi
-                const isOpen = await waitForSocketOpen(session.sock, 12000);
+                const isOpen = await waitForSocketOpen(session.sock, 15000);
                 if (!isOpen) {
                     return res.status(500).json({ error: 'Koneksi ke server WhatsApp belum siap. Silakan klik lagi dalam beberapa detik.' });
                 }
 
                 // Beri jeda sejenak untuk memastikan enkripsi noise handshake selesai
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await new Promise(resolve => setTimeout(resolve, 1500));
 
                 // Request kode pairing dari WhatsApp
                 console.log(`[INFO] Meminta pairing code untuk user ${userId} ke nomor ${cleanNumber}...`);
@@ -2076,6 +2145,59 @@ async function startWhatsAppBot(userId, onStatus) {
                 res.status(500).json({ error: err.message });
             }
         });
+
+        // ==========================================
+        // DATA RETENTION: CLEANUP OLD CHATS (> 30 HARI)
+        // ==========================================
+        async function cleanupOldChats(days = 30) {
+            try {
+                const retentionDays = Math.max(1, parseInt(days) || 30);
+                const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+                console.log(`[CLEANUP] Menjalankan pembersihan riwayat chat (> ${retentionDays} hari, cutoff: ${cutoffDate})...`);
+                
+                const { error, count } = await supabase
+                    .from('chats')
+                    .delete({ count: 'exact' })
+                    .lt('created_at', cutoffDate);
+                    
+                if (error) {
+                    console.error('[CLEANUP] Gagal membersihkan riwayat chat:', error.message);
+                    return { success: false, error: error.message };
+                }
+
+                const deletedCount = count || 0;
+                console.log(`🧹 [CLEANUP] Selesai: ${deletedCount} pesan chat lama (> ${retentionDays} hari) berhasil dibersihkan dari database.`);
+                return { success: true, retentionDays, cutoffDate, deletedCount };
+            } catch (err) {
+                console.error('[CLEANUP] Exception saat membersihkan chat lama:', err.message);
+                return { success: false, error: err.message };
+            }
+        }
+
+        // Endpoint pembersihan chat lama (Manual Trigger oleh Admin)
+        app.post('/api/admin/clean-chats', async (req, res) => {
+            const days = req.body?.days || 30;
+            const result = await cleanupOldChats(days);
+            if (result.success) {
+                res.json({
+                    success: true,
+                    message: `Berhasil membersihkan ${result.deletedCount} pesan lama (> ${result.retentionDays} hari).`,
+                    deletedCount: result.deletedCount,
+                    retentionDays: result.retentionDays,
+                    cutoffDate: result.cutoffDate
+                });
+            } else {
+                res.status(500).json({ error: 'Gagal membersihkan chat: ' + result.error });
+            }
+        });
+
+        // Jalankan pembersihan otomatis: 15 detik setelah boot, lalu diulang otomatis setiap 24 jam
+        setTimeout(() => {
+            cleanupOldChats(30).catch(() => {});
+            setInterval(() => {
+                cleanupOldChats(30).catch(() => {});
+            }, 24 * 60 * 60 * 1000);
+        }, 15000);
 
         // Health check endpoint
         app.get('/health', (req, res) => {

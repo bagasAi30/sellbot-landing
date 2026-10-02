@@ -439,15 +439,65 @@
                                 <i class="ph-fill ph-sparkle" style="color: #9333EA;"></i>
                             </div>
                             <div>
-                                <h3 class="kb-card-title">AI Persona & System Prompt</h3>
-                                <p class="kb-card-subtitle">Atur karakter, tone komunikasi, dan gaya bicara AI toko Anda</p>
+                                <h3 class="kb-card-title">Aturan Toko & Gaya Bahasa AI</h3>
+                                <p class="kb-card-subtitle">Atur dengan cepat menggunakan checklist otomatis</p>
                             </div>
                         </div>
                     </div>
-                    <div class="kb-form-group">
-                        <label class="kb-label">System Prompt</label>
-                        <textarea id="systemPromptInput" class="kb-textarea" rows="7" placeholder="Contoh: Kamu adalah asisten CS ramah untuk toko fashion kami. Selalu sapa pelanggan dengan 'Kak'. Gunakan bahasa santai namun profesional. Jangan pernah memberikan diskon tanpa persetujuan admin..."></textarea>
-                        <span class="kb-hint"><i class="ph ph-lightbulb"></i> Instruksikan AI soal cara berbicara, batasan yang harus diikuti, dan tone percakapan yang diinginkan.</span>
+                    
+                    <div style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+                        
+                        <div>
+                            <div style="font-weight: 600; margin-bottom: 8px;">1. Gaya Bahasa & Sapaan</div>
+                            <label style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; cursor: pointer;">
+                                <input type="checkbox" id="chk_gaya_santai" class="ai-checkbox" style="margin-top: 4px;"> 
+                                <span style="font-size: 13px; line-height: 1.4;">Gunakan gaya bahasa santai dan ramah. Sapa pelanggan dengan 'Kak' dan gunakan emoji.</span>
+                            </label>
+                            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="chk_gaya_formal" class="ai-checkbox" style="margin-top: 4px;">
+                                <span style="font-size: 13px; line-height: 1.4;">Gunakan gaya bahasa formal dan profesional. Sapa pelanggan dengan 'Bapak/Ibu'.</span>
+                            </label>
+                        </div>
+                        
+                        <div style="height: 1px; background: var(--border-color);"></div>
+
+                        <div>
+                            <div style="font-weight: 600; margin-bottom: 8px;">2. Metode Pembayaran</div>
+                            <label style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; cursor: pointer;">
+                                <input type="checkbox" id="chk_terima_cod" class="ai-checkbox" style="margin-top: 4px;"> 
+                                <span style="font-size: 13px; line-height: 1.4;">Toko ini Menerima COD (Bayar di Tempat).</span>
+                            </label>
+                            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="chk_tolak_cod" class="ai-checkbox" style="margin-top: 4px;">
+                                <span style="font-size: 13px; line-height: 1.4;">Toko ini HANYA melayani Transfer/E-Wallet (Tolak COD dengan halus jika diminta).</span>
+                            </label>
+                        </div>
+
+                        <div style="height: 1px; background: var(--border-color);"></div>
+
+                        <div>
+                            <div style="font-weight: 600; margin-bottom: 8px;">3. Kebijakan Khusus</div>
+                            <label style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; cursor: pointer;">
+                                <input type="checkbox" id="chk_wajib_unboxing" class="ai-checkbox" style="margin-top: 4px;"> 
+                                <span style="font-size: 13px; line-height: 1.4;">Wajibkan Video Unboxing (Ingatkan pembeli saat mengirim invoice/resi).</span>
+                            </label>
+                            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="chk_upselling" class="ai-checkbox" style="margin-top: 4px;">
+                                <span style="font-size: 13px; line-height: 1.4;">Lakukan Upselling (Tawarkan produk alternatif jika stok kosong / tawarkan tambah pesanan).</span>
+                            </label>
+                        </div>
+
+                        <div style="height: 1px; background: var(--border-color);"></div>
+
+                        <div class="kb-form-group" style="margin-bottom: 0;">
+                            <label class="kb-label">Catatan Tambahan Khusus / Promo (Opsional)</label>
+                            <textarea id="customRulesInput" class="kb-textarea" rows="3" placeholder="Contoh: Bulan ini sedang ada promo beli 2 gratis 1 untuk semua kaos..."></textarea>
+                            <span class="kb-hint" style="margin-top: 6px;"><i class="ph ph-lightbulb"></i> Isi jika ada aturan/promo unik yang tidak ada di atas.</span>
+                        </div>
+
+                        <!-- Hidden inputs for backend compat -->
+                        <textarea id="systemPromptInput" style="display: none;"></textarea>
+
                     </div>
                     <div class="kb-card-footer">
                         <button id="btnSaveSystemPrompt" class="btn btn-primary"><i class="ph ph-floppy-disk"></i> Simpan Konfigurasi</button>

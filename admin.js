@@ -431,6 +431,35 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const btnManualCleanChats = document.getElementById('btnManualCleanChats');
+    if (btnManualCleanChats) {
+        btnManualCleanChats.addEventListener('click', async () => {
+            const inputDays = document.getElementById('inputCleanDays');
+            const days = Number(inputDays?.value || 30);
+            if (!confirm(`Hapus riwayat chat pelanggan yang lebih dari ${days} hari? Data transaksi (invoice) dan database kontak TIDAK akan terhapus.`)) return;
+
+            const origHtml = btnManualCleanChats.innerHTML;
+            btnManualCleanChats.disabled = true;
+            btnManualCleanChats.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i> Membersihkan...';
+
+            try {
+                const res = await fetch('/api/admin/clean-chats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ days })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Gagal membersihkan chat');
+                showToast(data.message || `Berhasil membersihkan chat lama > ${days} hari`, 'success');
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                btnManualCleanChats.innerHTML = origHtml;
+                btnManualCleanChats.disabled = false;
+            }
+        });
+    }
+
     // ============================================
     // 11. MANAGE / EDIT / DELETE USER
     // ============================================

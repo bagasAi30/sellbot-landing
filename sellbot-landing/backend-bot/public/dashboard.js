@@ -434,7 +434,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btnSaveSystemPrompt = document.getElementById('btnSaveSystemPrompt');
     if (btnSaveSystemPrompt) {
         btnSaveSystemPrompt.addEventListener('click', async () => {
-            const content = document.getElementById('systemPromptInput').value;
+            // Build prompt from checklist
+            let generated = "Kamu adalah asisten CS ramah untuk toko kami.\n";
+            const config = {
+                santai: document.getElementById('chk_gaya_santai')?.checked,
+                formal: document.getElementById('chk_gaya_formal')?.checked,
+                terima_cod: document.getElementById('chk_terima_cod')?.checked,
+                tolak_cod: document.getElementById('chk_tolak_cod')?.checked,
+                wajib_unboxing: document.getElementById('chk_wajib_unboxing')?.checked,
+                upselling: document.getElementById('chk_upselling')?.checked,
+                custom: document.getElementById('customRulesInput')?.value || ''
+            };
+
+            if (config.santai) generated += "- Selalu sapa pelanggan dengan 'Kak'. Gunakan bahasa santai namun sopan. Sesekali gunakan emoji ramah.\n";
+            if (config.formal) generated += "- Sapa pelanggan dengan 'Bapak/Ibu'. Gunakan bahasa baku yang profesional dan sopan.\n";
+            if (config.terima_cod) generated += "- Toko ini menerima pembayaran COD (Bayar di Tempat). Jika pelanggan bertanya, informasikan bahwa COD tersedia.\n";
+            if (config.tolak_cod) generated += "- Toko ini HANYA melayani pembayaran Transfer Bank atau E-Wallet. Tolak secara halus jika pelanggan meminta COD.\n";
+            if (config.wajib_unboxing) generated += "- Selalu ingatkan pelanggan untuk melakukan video unboxing saat paket diterima demi keamanan garansi klaim.\n";
+            if (config.upselling) generated += "- Lakukan upselling secara natural. Jika barang yang diminta kosong, otomatis tawarkan produk serupa yang tersedia.\n";
+            
+            if (config.custom) generated += `\n[ATURAN TAMBAHAN / PROMO]\n${config.custom}\n`;
+
+            // Append hidden config state
+            generated += `\n\n===CONFIG===\n${JSON.stringify(config)}`;
+            
+            const content = generated;
+            
             const originalText = btnSaveSystemPrompt.innerHTML;
             btnSaveSystemPrompt.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Menyimpan...';
             btnSaveSystemPrompt.disabled = true;
@@ -1326,6 +1351,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const systemPromptInput = document.getElementById('systemPromptInput');
                 if (systemPromptInput && knowledge.system_prompt) {
                     systemPromptInput.value = knowledge.system_prompt;
+                    
+                    // Parse embedded config
+                    try {
+                        const parts = knowledge.system_prompt.split('===CONFIG===\n');
+                        if (parts.length > 1) {
+                            const config = JSON.parse(parts[1]);
+                            if (document.getElementById('chk_gaya_santai')) document.getElementById('chk_gaya_santai').checked = config.santai || false;
+                            if (document.getElementById('chk_gaya_formal')) document.getElementById('chk_gaya_formal').checked = config.formal || false;
+                            if (document.getElementById('chk_terima_cod')) document.getElementById('chk_terima_cod').checked = config.terima_cod || false;
+                            if (document.getElementById('chk_tolak_cod')) document.getElementById('chk_tolak_cod').checked = config.tolak_cod || false;
+                            if (document.getElementById('chk_wajib_unboxing')) document.getElementById('chk_wajib_unboxing').checked = config.wajib_unboxing || false;
+                            if (document.getElementById('chk_upselling')) document.getElementById('chk_upselling').checked = config.upselling || false;
+                            if (document.getElementById('customRulesInput')) document.getElementById('customRulesInput').value = config.custom || '';
+                        }
+                    } catch(e) {
+                        console.error('Failed to parse system_prompt config:', e);
+                    }
                 }
                 const knowledgeInput = document.getElementById('knowledgeInput');
                 if (knowledgeInput && knowledge.store_rules) {

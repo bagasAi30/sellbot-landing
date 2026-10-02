@@ -339,6 +339,23 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="widget glass form-card">
+                        <div class="widget-header">
+                            <h3><i class="ph-fill ph-database"></i> Database & Data Retention</h3>
+                        </div>
+                        <div class="form-group">
+                            <label>Auto-Cleanup Riwayat Chat</label>
+                            <span class="form-hint" style="display:block;margin-bottom:10px;">Chat lebih dari batas hari otomatis dibersihkan setiap 24 jam agar database Supabase tetap hemat dan kueri respons AI tetap kilat.</span>
+                            <div style="display:flex;gap:10px;align-items:center;">
+                                <input type="number" class="form-control" id="inputCleanDays" value="30" min="7" max="365" style="max-width:90px;" placeholder="30">
+                                <span style="font-size:13px;color:var(--text-secondary);">Hari</span>
+                                <button type="button" class="btn btn-outline" id="btnManualCleanChats" style="margin-left:auto;white-space:nowrap;">
+                                    <i class="ph ph-trash"></i> Bersihkan Sekarang
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>

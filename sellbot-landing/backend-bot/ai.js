@@ -155,34 +155,46 @@ PENTING: JANGAN PERNAH MENGGUNAKAN TAG <think>! Jawab langsung. Pastikan tidak a
 
         try {
             const response = await groq.chat.completions.create({
-                model: "openai/gpt-oss-120b",
+                model: "openai/gpt-oss-20b",
                 temperature: 0.1,
                 max_tokens: 1000,
                 messages: messages
             });
             content = response.choices[0]?.message?.content || "";
         } catch (firstErr) {
-            console.error("⚠️ Request groq (openai/gpt-oss-120b) gagal:", firstErr.message);
+            console.error("⚠️ Request groq (openai/gpt-oss-20b) gagal:", firstErr.message);
             try {
-                console.log("🔄 Mencoba fallback groq (openai/gpt-oss-20b)...");
+                console.log("🔄 Mencoba fallback groq (openai/gpt-oss-120b)...");
                 const response = await groq.chat.completions.create({
-                    model: "openai/gpt-oss-20b",
+                    model: "openai/gpt-oss-120b",
                     temperature: 0.1,
                     max_tokens: 1000,
                     messages: messages
                 });
                 content = response.choices[0]?.message?.content || "";
             } catch (secondErr) {
-                console.error("⚠️ Request groq fallback gagal:", secondErr.message);
-                if (genAI) {
-                    console.log("🔄 Fallback menggunakan Gemini...");
-                    try {
-                        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-                        const prompt = messages.map(m => `${m.role === 'user' ? 'User' : m.role === 'system' ? 'System' : 'Assistant'}: ${m.content}`).join('\n\n') + '\n\nAssistant:';
-                        const result = await model.generateContent(prompt);
-                        content = (await result.response).text().trim();
-                    } catch (geminiErr) {
-                        console.error("⚠️ Request Gemini fallback gagal:", geminiErr.message);
+                console.error("⚠️ Request groq fallback (120b) gagal:", secondErr.message);
+                try {
+                    console.log("🔄 Mencoba fallback groq (qwen/qwen3.8-27b)...");
+                    const response = await groq.chat.completions.create({
+                        model: "qwen/qwen3.8-27b",
+                        temperature: 0.1,
+                        max_tokens: 1000,
+                        messages: messages
+                    });
+                    content = response.choices[0]?.message?.content || "";
+                } catch (thirdErr) {
+                    console.error("⚠️ Request groq fallback (qwen) gagal:", thirdErr.message);
+                    if (genAI) {
+                        console.log("🔄 Fallback menggunakan Gemini...");
+                        try {
+                            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                            const prompt = messages.map(m => `${m.role === 'user' ? 'User' : m.role === 'system' ? 'System' : 'Assistant'}: ${m.content}`).join('\n\n') + '\n\nAssistant:';
+                            const result = await model.generateContent(prompt);
+                            content = (await result.response).text().trim();
+                        } catch (geminiErr) {
+                            console.error("⚠️ Request Gemini fallback gagal:", geminiErr.message);
+                        }
                     }
                 }
             }
@@ -456,22 +468,32 @@ Format balasanmu WAJIB berupa JSON valid persis seperti ini (tanpa markdown tamb
         if (groq) {
             try {
                 const response = await groq.chat.completions.create({
-                    model: "openai/gpt-oss-120b",
+                    model: "openai/gpt-oss-20b",
                     temperature: 0.1,
                     messages: [{ role: "user", content: prompt }]
                 });
                 text = response.choices[0]?.message?.content || "";
             } catch (err) {
-                console.warn("⚠️ Intent extraction Groq (openai/gpt-oss-120b) gagal:", err.message);
+                console.warn("⚠️ Intent extraction Groq (openai/gpt-oss-20b) gagal:", err.message);
                 try {
                     const response = await groq.chat.completions.create({
-                        model: "openai/gpt-oss-20b",
+                        model: "qwen/qwen3.8-27b",
                         temperature: 0.1,
                         messages: [{ role: "user", content: prompt }]
                     });
                     text = response.choices[0]?.message?.content || "";
                 } catch (fallbackErr) {
-                    console.warn("⚠️ Intent extraction Groq fallback gagal:", fallbackErr.message);
+                    console.warn("⚠️ Intent extraction Groq fallback (qwen) gagal:", fallbackErr.message);
+                    try {
+                        const response = await groq.chat.completions.create({
+                            model: "openai/gpt-oss-120b",
+                            temperature: 0.1,
+                            messages: [{ role: "user", content: prompt }]
+                        });
+                        text = response.choices[0]?.message?.content || "";
+                    } catch (fallback120Err) {
+                        console.warn("⚠️ Intent extraction Groq 120b fallback gagal:", fallback120Err.message);
+                    }
                 }
             }
         }
