@@ -431,53 +431,26 @@
             <!-- Settings & Configuration Cards -->
             <div class="kb-config-grid">
 
-                <!-- Card: AI Persona -->
-                <div class="kb-card">
-                    <div class="kb-card-header">
-                        <div class="kb-card-title-group">
-                            <div class="kb-card-icon" style="background: #F3E8FF; border-color: #E9D5FF;">
-                                <i class="ph-fill ph-sparkle" style="color: #9333EA;"></i>
-                            </div>
-                            <div>
-                                <h3 class="kb-card-title">AI Persona & System Prompt</h3>
-                                <p class="kb-card-subtitle">Atur karakter, tone komunikasi, dan gaya bicara AI toko Anda</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="kb-form-group">
-                        <label class="kb-label">System Prompt</label>
-                        <textarea id="systemPromptInput" class="kb-textarea" rows="7" placeholder="Contoh: Kamu adalah asisten CS ramah untuk toko fashion kami. Selalu sapa pelanggan dengan 'Kak'. Gunakan bahasa santai namun profesional. Jangan pernah memberikan diskon tanpa persetujuan admin..."></textarea>
-                        <span class="kb-hint"><i class="ph ph-lightbulb"></i> Instruksikan AI soal cara berbicara, batasan yang harus diikuti, dan tone percakapan yang diinginkan.</span>
-                    </div>
-                    <div class="kb-card-footer">
-                        <button id="btnSaveSystemPrompt" class="btn btn-primary"><i class="ph ph-floppy-disk"></i> Simpan Konfigurasi</button>
-                    </div>
-                </div>
-
-                <!-- Card: Product Knowledge Base -->
-                <div class="kb-card ai-card">
+                <!-- Card: AI Chat Prompt & Instruksi -->
+                <div class="kb-card ai-card" style="grid-column: 1 / -1;">
                     <div class="kb-card-header">
                         <div class="kb-card-title-group">
                             <div class="kb-card-icon ai-icon-container">
                                 <i class="ph-fill ph-sparkle"></i>
                             </div>
                             <div>
-                                <h3 class="kb-card-title">Product Knowledge Base</h3>
-                                <p class="kb-card-subtitle">Teks konteks yang digunakan AI menjawab pertanyaan produk</p>
+                                <h3 class="kb-card-title">AI Chat Prompt & Instruksi</h3>
+                                <p class="kb-card-subtitle">Atur karakter AI, gaya bahasa, serta instruksi khusus produk (promo, FAQ, aturan toko)</p>
                             </div>
                         </div>
-                        <button class="btn btn-outline" onclick="document.getElementById('docInput').click()" style="white-space:nowrap;flex-shrink:0;">
-                            <i class="ph ph-upload-simple"></i> Upload Dokumen
-                        </button>
                     </div>
                     <div class="kb-form-group">
-                        <label class="kb-label">Detailed Context</label>
-                        <textarea id="knowledgeInput" class="kb-textarea" rows="7" placeholder="Paste spesifikasi produk lengkap, tabel harga, FAQ, prosedur komplain, info pengiriman, dan informasi penting lainnya di sini..."></textarea>
-                        <span class="kb-hint"><i class="ph ph-lightbulb"></i> AI akan mencari informasi ini saat menjawab pertanyaan yang tidak tercakup di tabel produk di atas.</span>
+                        <label class="kb-label">System Prompt & Knowledge</label>
+                        <textarea id="systemPromptInput" class="kb-textarea" rows="10" placeholder="Contoh: Kamu adalah asisten CS ramah untuk toko fashion kami. Selalu sapa pelanggan dengan 'Kak'. Gunakan bahasa santai namun profesional. Info Promo: Diskon 10% untuk produk baju lengan panjang..."></textarea>
+                        <span class="kb-hint"><i class="ph ph-lightbulb"></i> Instruksikan AI soal cara berbicara dan berikan informasi tambahan terkait toko/produk yang tidak ada di tabel produk.</span>
                     </div>
-                    <input type="file" id="docInput" style="display:none;" accept=".txt,.pdf,.docx,.csv">
                     <div class="kb-card-footer">
-                        <button id="btnSaveKnowledge" class="btn ai-btn">Simpan Knowledge</button>
+                        <button id="btnSaveSystemPrompt" class="btn btn-primary"><i class="ph ph-floppy-disk"></i> Simpan Konfigurasi</button>
                     </div>
                 </div>
 

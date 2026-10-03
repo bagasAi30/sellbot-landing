@@ -214,10 +214,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             btnSaveAll.disabled = true;
 
             const btnSysPrompt = document.getElementById('btnSaveSystemPrompt');
-            const btnKnowledge = document.getElementById('btnSaveKnowledge');
 
             if (btnSysPrompt) await btnSysPrompt.click();
-            if (btnKnowledge) await btnKnowledge.click();
 
             setTimeout(() => {
                 showToast('Semua data pengetahuan toko berhasil disimpan!', 'success');
@@ -410,25 +408,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Document Upload handling
-    const docInput = document.getElementById('docInput');
-    if (docInput) {
-        docInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
 
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const text = event.target.result;
-                const knowledgeInput = document.getElementById('knowledgeInput');
-                if (knowledgeInput) {
-                    knowledgeInput.value = (knowledgeInput.value ? knowledgeInput.value + '\n\n' : '') + `=== DOKUMEN: ${file.name} ===\n` + text;
-                    showToast(`Dokumen ${file.name} berhasil dimuat ke Detailed Context!`, 'success');
-                }
-            };
-            reader.readAsText(file);
-        });
-    }
 
     // Save System Prompt
     const btnSaveSystemPrompt = document.getElementById('btnSaveSystemPrompt');
@@ -443,15 +423,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const { data: { session } } = await window.supabaseClient.auth.getSession();
                 const user_id = session.user.id;
 
-                const { data: existing } = await window.supabaseClient
-                    .from('knowledge_base').select('store_rules').eq('user_id', user_id).single();
-
                 const { error } = await window.supabaseClient
                     .from('knowledge_base')
                     .upsert({
                         user_id: user_id,
                         system_prompt: content,
-                        store_rules: existing?.store_rules || ''
+                        store_rules: ''
                     }, { onConflict: 'user_id' });
 
                 if (!error) showToast('System Prompt berhasil disimpan! AI akan otomatis mengikuti instruksi ini.', 'success');
@@ -464,39 +441,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Save Knowledge Base Detailed Context
-    const btnSaveKnowledge = document.getElementById('btnSaveKnowledge');
-    if (btnSaveKnowledge) {
-        btnSaveKnowledge.addEventListener('click', async () => {
-            const content = document.getElementById('knowledgeInput').value;
-            const originalText = btnSaveKnowledge.innerHTML;
-            btnSaveKnowledge.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Menyimpan...';
-            btnSaveKnowledge.disabled = true;
 
-            try {
-                const { data: { session } } = await window.supabaseClient.auth.getSession();
-                const user_id = session.user.id;
-
-                const { data: existing } = await window.supabaseClient
-                    .from('knowledge_base').select('system_prompt').eq('user_id', user_id).single();
-
-                const { error } = await window.supabaseClient
-                    .from('knowledge_base')
-                    .upsert({
-                        user_id: user_id,
-                        store_rules: content,
-                        system_prompt: existing?.system_prompt || ''
-                    }, { onConflict: 'user_id' });
-
-                if (!error) showToast('Knowledge Context berhasil disimpan!', 'success');
-                else showToast('Gagal menyimpan Knowledge: ' + error.message, 'error');
-            } catch (err) {
-                showToast('Terjadi kesalahan: ' + err.message, 'error');
-            }
-            btnSaveKnowledge.innerHTML = originalText;
-            btnSaveKnowledge.disabled = false;
-        });
-    }
 
     // =============================================
     // 2. ATURAN NOMOR (BLOCKED & SPECIAL NUMBERS)
@@ -1324,12 +1269,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (!knowError && knowledge) {
                 const systemPromptInput = document.getElementById('systemPromptInput');
-                if (systemPromptInput && knowledge.system_prompt) {
-                    systemPromptInput.value = knowledge.system_prompt;
-                }
-                const knowledgeInput = document.getElementById('knowledgeInput');
-                if (knowledgeInput && knowledge.store_rules) {
-                    knowledgeInput.value = knowledge.store_rules;
+                if (systemPromptInput) {
+                    let combined = knowledge.system_prompt || '';
+                    if (knowledge.store_rules) {
+                        combined += (combined ? '\n\n' : '') + knowledge.store_rules;
+                    }
+                    systemPromptInput.value = combined;
                 }
                 if (knowledge.blocked_numbers) {
                     blockedNumbers = knowledge.blocked_numbers.split(/[\n,]+/).map(n => n.trim()).filter(Boolean);
