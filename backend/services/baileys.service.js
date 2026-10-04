@@ -42,7 +42,9 @@ async function connectToWhatsApp() {
             auth: state,
             printQRInTerminal: false,
             logger: pino({ level: 'silent' }),
-            browser: Browsers.ubuntu('Chrome')
+            browser: Browsers.ubuntu('Chrome'),
+            syncFullHistory: false,
+            markOnlineOnConnect: true
         });
 
         // Handle update koneksi (QR Code & Status Koneksi)
