@@ -42,7 +42,7 @@ async function connectToWhatsApp() {
             auth: state,
             printQRInTerminal: false,
             logger: pino({ level: 'silent' }),
-            browser: Browsers.ubuntu('Chrome'),
+            browser: ['AsistenLapak', 'Safari', '3.0'],
             syncFullHistory: false,
             markOnlineOnConnect: true
         });

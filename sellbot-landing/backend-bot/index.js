@@ -390,7 +390,7 @@ async function startWhatsAppBot(userId, onStatus) {
         },
         logger,
         printQRInTerminal: true,
-        browser: Browsers.ubuntu('Chrome'),
+        browser: ['AsistenLapak', 'Safari', '3.0'],
         syncFullHistory: false,
         markOnlineOnConnect: true,
         generateHighQualityLinkPreview: false,
