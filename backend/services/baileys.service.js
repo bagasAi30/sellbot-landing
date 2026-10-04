@@ -42,7 +42,7 @@ async function connectToWhatsApp() {
             auth: state,
             printQRInTerminal: false,
             logger: pino({ level: 'silent' }),
-            browser: ['AsistenLapak', 'Safari', '3.0'],
+            browser: ['Mac OS', 'Safari', '10.15.7'],
             syncFullHistory: false,
             markOnlineOnConnect: true
         });

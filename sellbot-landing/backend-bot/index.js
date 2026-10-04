@@ -371,14 +371,14 @@ async function startWhatsAppBot(userId, onStatus) {
     const sessionDir = path.join(__dirname, `auth_info_${userId}`);
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
 
-    // Ambil versi WhatsApp Web terbaru agar handshake sinkron dengan server WhatsApp
-    let version = [2, 3000, 1043857760];
-    try {
-        const vInfo = await fetchLatestBaileysVersion();
-        if (vInfo && vInfo.version) version = vInfo.version;
-    } catch (vErr) {
-        console.warn('⚠️ Gagal fetch versi Baileys terbaru, gunakan default:', vErr.message);
-    }
+    // Gunakan versi hardcoded yang stabil untuk mencegah WA loading terus di HP
+    let version = [2, 3000, 1015901307];
+    // try {
+    //     const vInfo = await fetchLatestBaileysVersion();
+    //     if (vInfo && vInfo.version) version = vInfo.version;
+    // } catch (vErr) {
+    //     console.warn('⚠️ Gagal fetch versi Baileys terbaru, gunakan default:', vErr.message);
+    // }
 
     const logger = pino({ level: 'silent' });
 
@@ -390,7 +390,7 @@ async function startWhatsAppBot(userId, onStatus) {
         },
         logger,
         printQRInTerminal: true,
-        browser: ['AsistenLapak', 'Safari', '3.0'],
+        browser: ['Mac OS', 'Safari', '10.15.7'],
         syncFullHistory: false,
         markOnlineOnConnect: true,
         generateHighQualityLinkPreview: false,
