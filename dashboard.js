@@ -1484,7 +1484,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function checkBotStatus() {
         if (!window.currentUserId) return;
         try {
-            const res = await fetch(`/api/bot/status/${window.currentUserId}`);
+            const res = await fetch(`/api/bot/status`);
             if (!res.ok) throw new Error('Network response was not ok');
             const data = await res.json();
             updateBotUI(data);
