@@ -371,14 +371,14 @@ async function startWhatsAppBot(userId, onStatus) {
     const sessionDir = path.join(__dirname, `auth_info_${userId}`);
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
 
-    // Gunakan versi hardcoded yang stabil untuk mencegah WA loading terus di HP
-    let version = [2, 3000, 1015901307];
-    // try {
-    //     const vInfo = await fetchLatestBaileysVersion();
-    //     if (vInfo && vInfo.version) version = vInfo.version;
-    // } catch (vErr) {
-    //     console.warn('⚠️ Gagal fetch versi Baileys terbaru, gunakan default:', vErr.message);
-    // }
+    // Ambil versi WhatsApp Web terbaru agar handshake sinkron dengan server WhatsApp
+    let version = [2, 3000, 1015901307]; // Fallback if fetch fails
+    try {
+        const vInfo = await fetchLatestBaileysVersion();
+        if (vInfo && vInfo.version) version = vInfo.version;
+    } catch (vErr) {
+        console.warn('⚠️ Gagal fetch versi Baileys terbaru, gunakan default:', vErr.message);
+    }
 
     const logger = pino({ level: 'silent' });
 
