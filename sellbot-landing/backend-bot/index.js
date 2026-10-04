@@ -1682,6 +1682,46 @@ async function startWhatsAppBot(userId, onStatus) {
             }
         });
 
+        // Endpoint untuk mematikan / reset bot (logout)
+        app.post('/api/bot/logout', async (req, res) => {
+            const { userId } = req.body;
+            if (!userId) return res.status(400).json({ error: 'userId diperlukan' });
+            
+            const sessionDir = path.join(__dirname, `auth_info_${userId}`);
+            
+            if (activeSessions[userId] && activeSessions[userId].sock) {
+                try {
+                    activeSessions[userId].sock.logout('user_requested');
+                } catch (e) {
+                    console.error('Error logging out sock:', e.message);
+                }
+                delete activeSessions[userId];
+            }
+            
+            try {
+                if (fs.existsSync(sessionDir)) {
+                    fs.rmSync(sessionDir, { recursive: true, force: true });
+                }
+                res.json({ success: true, message: 'Sesi WhatsApp berhasil dihapus. Silakan tautkan ulang.' });
+            } catch (err) {
+                console.error('Gagal hapus sessionDir:', err);
+                res.status(500).json({ error: 'Gagal menghapus sesi bot' });
+            }
+        });
+
+        // Endpoint untuk stop bot sementara
+        app.post('/api/bot/stop', (req, res) => {
+            const { userId } = req.body;
+            if (!userId) return res.status(400).json({ error: 'userId diperlukan' });
+            if (activeSessions[userId] && activeSessions[userId].sock) {
+                try {
+                    activeSessions[userId].sock.end(undefined);
+                } catch (e) {}
+                delete activeSessions[userId];
+            }
+            res.json({ success: true, message: 'Bot WhatsApp berhasil dimatikan' });
+        });
+
         // Endpoint untuk mengecek status bot
         app.get('/api/bot/status/:userId', (req, res) => {
             const { userId } = req.params;

@@ -132,7 +132,7 @@ router.put('/knowledge', async (req, res) => {
 });
 
 // GET /api/bot/status
-router.get('/bot/status', (req, res) => {
+router.get('/bot/status/:userId?', (req, res) => {
     res.json(baileysService.getStatus());
 });
 
