@@ -1573,6 +1573,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                     botStatusMsg.innerHTML = `<i class="ph-fill ph-qr-code"></i><span>Silakan scan QR Code untuk menghubungkan WhatsApp.</span>`;
                 }
             }
+        } else if (data.status === 'CONNECTING') {
+            setBadge('disconnected', 'Menghubungkan...');
+            if (waDisconnectedState) waDisconnectedState.style.display = 'none';
+            if (waConnectedState) waConnectedState.style.display = 'none';
+            if (waQrImage) waQrImage.style.display = 'none';
+            if (waPairingBox) waPairingBox.style.display = 'none';
+            if (waQrLoading) {
+                waQrLoading.style.display = 'flex';
+                if (waQrLoadingText) waQrLoadingText.textContent = 'Memuat QR Code / Menghubungkan...';
+            }
+            if (botStatusMsg) {
+                botStatusMsg.innerHTML = `<i class="ph ph-spinner ph-spin"></i><span>Sedang menghubungi WhatsApp...</span>`;
+            }
         } else {
             setBadge('disconnected', 'Bot Nonaktif');
             if (waConnectedState) waConnectedState.style.display = 'none';

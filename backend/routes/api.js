@@ -167,6 +167,12 @@ router.post('/bot/reset', async (req, res) => {
     res.json({ success: true, message: 'Sesi WhatsApp berhasil direset. Silakan scan QR code baru.', status: baileysService.getStatus() });
 });
 
+// Alias logout to reset for compatibility with UI
+router.post('/bot/logout', async (req, res) => {
+    await baileysService.resetWhatsApp();
+    res.json({ success: true, message: 'Sesi WhatsApp berhasil dihapus.', status: baileysService.getStatus() });
+});
+
 // POST /api/bot/toggle-active
 router.post('/bot/toggle-active', (req, res) => {
     const { active } = req.body;
