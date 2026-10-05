@@ -1619,7 +1619,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (res.ok) {
                     showToast('Bot WhatsApp berhasil dimulai!', 'success');
-                    checkBotStatus();
+                    if (data.status === 'qr' && data.qr) {
+                        updateBotUI(data);
+                    } else if (data.status === 'CONNECTED') {
+                        updateBotUI(data);
+                    } else {
+                        checkBotStatus();
+                    }
                 } else {
                     showToast(data.error || 'Gagal memulai bot', 'error');
                     if (waQrLoading) waQrLoading.style.display = 'none';

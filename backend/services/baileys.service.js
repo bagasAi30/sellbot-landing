@@ -42,7 +42,7 @@ async function connectToWhatsApp() {
             auth: state,
             printQRInTerminal: false,
             logger: pino({ level: 'silent' }),
-            browser: ['Mac OS', 'Safari', '10.15.7'],
+            browser: Browsers.ubuntu('Chrome'),
             syncFullHistory: false,
             markOnlineOnConnect: true
         });
@@ -73,14 +73,16 @@ async function connectToWhatsApp() {
                     resetWhatsApp();
                 } else {
                     const shouldReconnect = !isStopping;
-                    connectionStatus = 'DISCONNECTED';
+                    connectionStatus = statusCode === DisconnectReason.restartRequired ? 'CONNECTING' : 'DISCONNECTED';
                     qrCodeDataURL = null;
                     console.log('Koneksi terputus. Status code:', statusCode, ', Mencoba ulang:', shouldReconnect);
+                    try { sock.ev.removeAllListeners(); } catch (e) {}
                     
                     if (shouldReconnect) {
+                        const reconnectDelay = statusCode === DisconnectReason.restartRequired ? 500 : 3000;
                         setTimeout(() => {
                             connectToWhatsApp();
-                        }, 3000);
+                        }, reconnectDelay);
                     }
                 }
             } else if (connection === 'open') {

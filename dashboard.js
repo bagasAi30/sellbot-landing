@@ -214,8 +214,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             btnSaveAll.disabled = true;
 
             const btnSysPrompt = document.getElementById('btnSaveSystemPrompt');
+            const btnKnowledge = document.getElementById('btnSaveKnowledge');
 
             if (btnSysPrompt) await btnSysPrompt.click();
+            if (btnKnowledge) await btnKnowledge.click();
 
             setTimeout(() => {
                 showToast('Semua data pengetahuan toko berhasil disimpan!', 'success');
@@ -408,13 +410,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // Document Upload handling
+    const docInput = document.getElementById('docInput');
+    if (docInput) {
+        docInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
 
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const text = event.target.result;
+                const knowledgeInput = document.getElementById('knowledgeInput');
+                if (knowledgeInput) {
+                    knowledgeInput.value = (knowledgeInput.value ? knowledgeInput.value + '\n\n' : '') + `=== DOKUMEN: ${file.name} ===\n` + text;
+                    showToast(`Dokumen ${file.name} berhasil dimuat ke Detailed Context!`, 'success');
+                }
+            };
+            reader.readAsText(file);
+        });
+    }
 
     // Save System Prompt
     const btnSaveSystemPrompt = document.getElementById('btnSaveSystemPrompt');
     if (btnSaveSystemPrompt) {
         btnSaveSystemPrompt.addEventListener('click', async () => {
             const content = document.getElementById('systemPromptInput').value;
+            
             const originalText = btnSaveSystemPrompt.innerHTML;
             btnSaveSystemPrompt.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Menyimpan...';
             btnSaveSystemPrompt.disabled = true;
@@ -441,6 +462,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // Save Knowledge Base Detailed Context
 
 
     // =============================================
@@ -1271,6 +1293,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const systemPromptInput = document.getElementById('systemPromptInput');
                 if (systemPromptInput) {
                     let combined = knowledge.system_prompt || '';
+                    if (combined.includes('===CONFIG===\n')) {
+                        combined = combined.split('===CONFIG===\n')[0].trim();
+                    }
                     if (knowledge.store_rules) {
                         combined += (combined ? '\n\n' : '') + knowledge.store_rules;
                     }
@@ -1594,7 +1619,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (res.ok) {
                     showToast('Bot WhatsApp berhasil dimulai!', 'success');
-                    checkBotStatus();
+                    if (data.status === 'qr' && data.qr) {
+                        updateBotUI(data);
+                    } else if (data.status === 'CONNECTED') {
+                        updateBotUI(data);
+                    } else {
+                        checkBotStatus();
+                    }
                 } else {
                     showToast(data.error || 'Gagal memulai bot', 'error');
                     if (waQrLoading) waQrLoading.style.display = 'none';
