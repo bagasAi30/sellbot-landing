@@ -410,7 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const masterAiKey = document.getElementById('settingMasterAiKey')?.value?.trim();
             const wabaId = document.getElementById('settingWabaId')?.value?.trim();
-            const defaultTrialDays = Number(document.getElementById('settingTrialDays')?.value || 14);
+            const defaultTrialDays = Number(document.getElementById('settingTrialDays')?.value || 1);
             const maintenanceMode = document.getElementById('settingMaintenanceMode')?.checked || false;
 
             try {

@@ -447,7 +447,7 @@
                     <div class="kb-form-group">
                         <label class="kb-label">System Prompt & Knowledge</label>
                         <textarea id="systemPromptInput" class="kb-textarea" rows="10" placeholder="Contoh: Kamu adalah asisten CS ramah untuk toko fashion kami. Selalu sapa pelanggan dengan 'Kak'. Gunakan bahasa santai namun profesional. Info Promo: Diskon 10% untuk produk baju lengan panjang..."></textarea>
-                        <span class="kb-hint"><i class="ph ph-lightbulb"></i> Instruksikan AI soal cara berbicara dan berikan informasi tambahan terkait toko/produk yang tidak ada di tabel produk.</span>
+                        <span class="kb-hint"><i class="ph-lightbulb"></i> Instruksikan AI soal cara berbicara dan berikan informasi tambahan terkait toko/produk yang tidak ada di tabel produk.</span>
                     </div>
                     <div class="kb-card-footer">
                         <button id="btnSaveSystemPrompt" class="btn btn-primary"><i class="ph ph-floppy-disk"></i> Simpan Konfigurasi</button>
@@ -859,15 +859,33 @@
         </div>
     </div>
 
+    <!-- Trial Welcome Modal (1 Hari / 100 Kredit) -->
+    <div class="modal-overlay" id="trialWelcomeModal">
+        <div class="modal-content" style="text-align: center; max-width: 460px; padding: 32px 28px; border-radius: 18px;">
+            <div style="width: 64px; height: 64px; background: rgba(99, 102, 241, 0.12); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; color: var(--primary); font-size: 32px;">
+                <i class="ph-fill ph-rocket-launch"></i>
+            </div>
+            <h3 style="margin-bottom: 10px; font-size: 20px; font-weight: 700;">Masa Trial 1 Hari Aktif!</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 22px; line-height: 1.6; font-size: 14px;">
+                Selamat datang di AsistenLapak AI!<br>
+                Akun Anda memiliki masa trial <strong>1 hari</strong> dengan kuota <strong>100 kredit chat WhatsApp</strong>.<br>
+                Segera hubungkan WhatsApp toko Anda dan mulai otomatisasi pesan sekarang!
+            </p>
+            <button class="btn btn-primary full-width" onclick="closeModal('trialWelcomeModal')">
+                Mulai Gunakan Bot Sekarang
+            </button>
+        </div>
+    </div>
+
     <!-- Trial Expired Modal -->
     <div class="modal-overlay" id="trialExpiredModal">
         <div class="modal-content" style="text-align: center;">
             <div style="font-size: 44px; color: var(--warning); margin-bottom: 14px;">
                 <i class="ph-fill ph-warning-circle"></i>
             </div>
-            <h3 style="margin-bottom: 10px; font-size: 20px;">Masa Uji Coba Berakhir</h3>
+            <h3 style="margin-bottom: 10px; font-size: 20px;">Masa Trial 1 Hari Berakhir</h3>
             <p style="color: var(--text-secondary); margin-bottom: 22px; line-height: 1.5; font-size: 14px;">
-                Batas masa uji coba gratis Anda telah selesai.<br>
+                Batas masa uji coba gratis 1 hari (100 kredit chat WhatsApp) Anda telah selesai.<br>
                 Silakan pilih paket langganan untuk terus menikmati asisten AI toko online Anda 24/7.
             </p>
             <button class="btn btn-primary full-width"

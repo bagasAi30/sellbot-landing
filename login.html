@@ -147,15 +147,56 @@
         }
 
         .free-trial-badge {
-            display: inline-block;
-            background: rgba(16, 185, 129, 0.2);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(16, 185, 129, 0.15);
             color: var(--success);
-            padding: 4px 12px;
+            padding: 6px 14px;
             border-radius: 20px;
             font-size: 13px;
             font-weight: 600;
             margin-bottom: 16px;
-            border: 1px solid rgba(16, 185, 129, 0.4);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.25s ease;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background: #ffffff;
+            border-radius: 18px;
+            max-width: 440px;
+            width: 100%;
+            padding: 32px 28px;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            transform: scale(0.95);
+            transition: transform 0.25s ease;
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
         }
     </style>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -176,6 +217,11 @@
 
             <!-- Register Form -->
             <form id="registerForm" class="auth-form active">
+                <div style="text-align: center;">
+                    <div class="free-trial-badge">
+                        <i class="ph-fill ph-sparkle"></i> Trial 1 Hari Gratis • 100 Kredit Chat WA
+                    </div>
+                </div>
                 <h2 class="auth-title">Daftar Akun Baru</h2>
                 <p class="auth-subtitle">Mulai otomatisasi chat toko Anda sekarang.</p>
 
@@ -196,8 +242,7 @@
                     <input type="password" class="form-control" placeholder="Minimal 8 karakter">
                 </div>
 
-                <button type="submit" class="btn btn-primary full-width" style="margin-top: 8px;">Daftar & Klaim
-                    Trial</button>
+                <button type="submit" class="btn btn-primary full-width" style="margin-top: 8px;">Daftar & Klaim Trial (1 Hari / 100 Kredit WA)</button>
 
                 <div class="auth-toggle">
                     Sudah punya akun? <a onclick="toggleAuth('login')">Masuk di sini</a>
@@ -231,6 +276,23 @@
 
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Trial Notice Modal -->
+    <div class="modal-overlay" id="trialNoticeModal">
+        <div class="modal-content">
+            <div style="width: 60px; height: 60px; background: rgba(16, 185, 129, 0.12); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; color: #10B981; font-size: 32px;">
+                <i class="ph-fill ph-gift"></i>
+            </div>
+            <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">Ketentuan Masa Trial</h3>
+            <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin-bottom: 22px;">
+                Masa uji coba gratis (trial) berlaku hanya <strong>1 hari</strong> dengan kuota <strong>100 kredit chat WhatsApp</strong>.<br>
+                Anda dapat menghubungkan bot dan mencoba semua fitur otomatisasi AI 24/7!
+            </p>
+            <button type="button" class="btn btn-primary full-width" onclick="closeTrialNoticeModal()">
+                Saya Mengerti & Lanjutkan
+            </button>
+        </div>
+    </div>
 
     <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

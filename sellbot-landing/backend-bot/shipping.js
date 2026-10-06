@@ -8,18 +8,60 @@ const STORE_ORIGIN_ID = process.env.STORE_ORIGIN_ID || 254; // 254 = Surabaya (c
  * Mencari ID Kota/Kecamatan berdasarkan string pencarian
  */
 async function searchDestination(query) {
+    if (!query || typeof query !== 'string') return null;
     try {
-        const response = await axios.get('https://rajaongkir.komerce.id/api/v1/destination/domestic-destination', {
-            headers: { key: RAJAONGKIR_API_KEY },
-            params: { search: query.trim() },
-            timeout: 8000
-        });
+        const cleanQuery = query.trim();
+        // Normalize common spaced subdistricts or variants (contoh: "tambak sari" -> "tambaksari")
+        const normalizedSpaced = cleanQuery.replace(/tambak\s+sari/gi, 'tambaksari');
+        const queryVariants = [
+            cleanQuery,
+            normalizedSpaced,
+            cleanQuery.replace(/[,\.\-]/g, ' ').replace(/\s+/g, ' ').trim()
+        ].filter((v, i, arr) => v && arr.indexOf(v) === i);
 
-        const data = response.data?.data;
-        if (data && data.length > 0) {
-            return data; // Return array of results
+        let combinedResults = [];
+        for (const q of queryVariants) {
+            try {
+                const response = await axios.get('https://rajaongkir.komerce.id/api/v1/destination/domestic-destination', {
+                    headers: { key: RAJAONGKIR_API_KEY },
+                    params: { search: q },
+                    timeout: 6000
+                });
+                const list = response.data?.data;
+                if (list && list.length > 0) {
+                    combinedResults.push(...list);
+                    if (combinedResults.length >= 10) break;
+                }
+            } catch (singleErr) {
+                // Lanjut ke varian berikutnya jika ada error
+            }
         }
-        return null;
+
+        if (combinedResults.length === 0) return null;
+
+        // Deduplikasi hasil berdasarkan destination id
+        const uniqueMap = new Map();
+        for (const item of combinedResults) {
+            const id = item.id || item.subdistrict_id || item.city_id;
+            if (id && !uniqueMap.has(id)) {
+                uniqueMap.set(id, item);
+            }
+        }
+        const results = Array.from(uniqueMap.values());
+
+        // Token scoring agar mencocokkan kata kota/kabupaten dan kecamatan secara optimal
+        const tokens = cleanQuery.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length >= 2);
+        if (tokens.length > 1) {
+            results.sort((a, b) => {
+                const aText = `${a.label || ''} ${a.subdistrict_name || ''} ${a.district_name || ''} ${a.city_name || ''}`.toLowerCase();
+                const bText = `${b.label || ''} ${b.subdistrict_name || ''} ${b.district_name || ''} ${b.city_name || ''}`.toLowerCase();
+                const aScore = tokens.filter(t => aText.includes(t)).length;
+                const bScore = tokens.filter(t => bText.includes(t)).length;
+                return bScore - aScore;
+            });
+        }
+
+        return results;
     } catch (err) {
         console.error("Error searchDestination:", err.message);
         return null;

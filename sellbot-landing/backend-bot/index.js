@@ -15,8 +15,61 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, download
 const pino = require('pino');
 const qrcode = require('qrcode');
 const { createClient } = require('@supabase/supabase-js');
-const { generateAIResponse, processImageWithGemini, extractIntentWithGemini, extractOrderDetails, cleanAndValidateLocation } = require('./ai');
+const { generateAIResponse, processImageWithGemini, extractIntentWithGemini, extractOrderDetails, cleanAndValidateLocation, getProductFullName, getProductWeight } = require('./ai');
 const { searchDestination, calculateShipping } = require('./shipping');
+
+function findMatchingProduct(searchText, products) {
+    if (!products || !products.length || !searchText) return null;
+    const cleanSearch = String(searchText).toLowerCase().trim();
+    if (!cleanSearch) return null;
+
+    // 1. Exact / inclusion check pada full name, name, variant
+    for (const p of products) {
+        const full = getProductFullName(p).toLowerCase();
+        const pName = String(p.name || p.title || '').toLowerCase();
+        const pVar = String(p.variant || '').toLowerCase();
+
+        if (full.length >= 3 && (cleanSearch.includes(full) || full.includes(cleanSearch))) return p;
+        if (pVar.length >= 3 && (cleanSearch.includes(pVar) || pVar.includes(cleanSearch))) return p;
+        if (pName.length >= 3 && !/^\d+$/.test(pName) && (cleanSearch.includes(pName) || pName.includes(cleanSearch))) return p;
+    }
+
+    // 2. Token overlap matching (abaikan kata umum / stop words)
+    const stopWords = new Set(['mau', 'beli', 'pesan', 'order', 'kak', 'min', 'ada', 'ready', 'ongkir', 'ke', 'ya', 'saya', 'tolong', 'paket', 'pcs', 'buah', 'biji', 'promo', 'bungkus']);
+    const searchTokens = cleanSearch
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(t => t.length >= 3 && !stopWords.has(t));
+
+    if (searchTokens.length > 0) {
+        let bestMatch = null;
+        let maxOverlap = 0;
+
+        for (const p of products) {
+            const candidateStr = `${getProductFullName(p)} ${p.variant || ''}`.toLowerCase();
+            const candTokens = candidateStr
+                .replace(/[^a-z0-9\s]/g, ' ')
+                .split(/\s+/)
+                .filter(t => t.length >= 3);
+
+            let overlap = 0;
+            for (const st of searchTokens) {
+                if (candTokens.some(ct => ct.includes(st) || st.includes(ct))) {
+                    overlap++;
+                }
+            }
+
+            if (overlap > maxOverlap && overlap >= 1) {
+                maxOverlap = overlap;
+                bestMatch = p;
+            }
+        }
+
+        if (bestMatch && maxOverlap >= 1) return bestMatch;
+    }
+
+    return null;
+}
 
 const fs = require('fs');
 const path = require('path');
@@ -841,40 +894,44 @@ async function startWhatsAppBot(userId, onStatus) {
 
                             const qtyParsed = Number(orderExtract.qty) || 1;
                             const unitName = orderExtract.unit || (qtyParsed > 1 ? 'paket' : 'pcs');
-                            const namaProd = orderExtract.produk || 'Produk';
+                            let namaProd = orderExtract.produk || 'Produk';
                             let totalB = Number(orderExtract.total_harga_barang) || 0;
-                            let unitWeight = 1000;
+                            let unitWeight = 250; // Default bobot satuan 250 gram, BUKAN 1.000 gram (1 kg)!
 
-                            // Cari harga dan berat asli dari database products
-                            if (products && products.length > 0) {
-                                const matchedProduct = products.find(p => {
-                                    const pName = (p.name || p.title || '').toLowerCase();
-                                    return pName.length > 2 && (namaProd.toLowerCase().includes(pName) || pName.includes(namaProd.toLowerCase()));
-                                });
-                                if (matchedProduct) {
-                                    const hrgSatuan = Number(matchedProduct.price || 0);
-                                    if (hrgSatuan > 0) {
-                                        totalB = hrgSatuan * qtyParsed;
-                                    }
-                                    if (matchedProduct.weight) {
-                                        unitWeight = matchedProduct.weight;
-                                    }
-                                } else {
-                                    // Fallback jika tidak match persis
-                                    const aiPrice = Number(orderExtract.total_harga_barang) || 0;
-                                    const firstProductPrice = Number(products[0].price || 0);
-                                    // Cek apakah AI mungkin mengembalikan harga satuan
-                                    if (aiPrice === firstProductPrice) {
-                                         totalB = firstProductPrice * qtyParsed;
-                                    } else if (aiPrice > 0 && aiPrice < 50000 && qtyParsed >= 10 && aiPrice === (totalB / qtyParsed)) {
-                                         // Jika totalB sudah sesuai, tidak perlu diubah.
-                                    } else if (aiPrice > 0 && aiPrice < 50000 && qtyParsed >= 10) {
-                                         totalB = aiPrice * qtyParsed;
-                                    }
+                            // Cari harga dan berat asli dari database products secara cerdas
+                            const allHistRaw = history.map(h => h.message || '').join(' ') + ' ' + textMessage;
+                            const matchedProduct = findMatchingProduct(namaProd, products)
+                                || findMatchingProduct(textMessage, products)
+                                || findMatchingProduct(allHistRaw, products);
+
+                            if (matchedProduct) {
+                                namaProd = getProductFullName(matchedProduct);
+                                const hrgSatuan = Number(matchedProduct.price || 0);
+                                if (hrgSatuan > 0) {
+                                    totalB = hrgSatuan * qtyParsed;
                                 }
+                                unitWeight = getProductWeight(matchedProduct, 250);
+                            } else if (products && products.length > 0) {
+                                // Fallback jika tidak match persis
+                                const aiPrice = Number(orderExtract.total_harga_barang) || 0;
+                                const firstProductPrice = Number(products[0].price || 0);
+                                if (aiPrice === firstProductPrice) {
+                                     totalB = firstProductPrice * qtyParsed;
+                                } else if (aiPrice > 0 && aiPrice < 50000 && qtyParsed >= 10 && aiPrice === (totalB / qtyParsed)) {
+                                     // Jika totalB sudah sesuai
+                                } else if (aiPrice > 0 && aiPrice < 50000 && qtyParsed >= 10) {
+                                     totalB = aiPrice * qtyParsed;
+                                }
+                                unitWeight = getProductWeight(products[0], 250);
                             }
 
-                            const orderBeratGram = Math.max(1000, qtyParsed * unitWeight);
+                            // PERHITUNGAN BERAT PAKET:
+                            // Dihitung berdasarkan berat per pcs asli (contoh: 10 pcs x 250g = 2.500g).
+                            // JANGAN PERNAH membulatkan per-pcs ke 1 kg!
+                            // Hanya batas minimal seluruh paket untuk ekspedisi adalah 1.000 gram.
+                            const totalPaketGram = qtyParsed * unitWeight;
+                            const orderBeratGram = Math.max(1000, totalPaketGram);
+                            const beratKgDisplay = totalPaketGram < 1000 ? `${totalPaketGram}g` : `${(totalPaketGram / 1000).toFixed(1).replace('.0', '')} kg`;
                             let shippingRates = null;
 
                             if (targetLokasi && targetLokasi.length >= 3) {
@@ -909,8 +966,10 @@ async function startWhatsAppBot(userId, onStatus) {
                                 totalBarang: totalB,
                                 namaPenerima: orderExtract.nama_penerima || customerName,
                                 alamat: orderExtract.alamat || destLabel,
+                                destId: destId,
                                 destLabel: destLabel,
-                                orderBeratKg: Math.ceil(orderBeratGram / 1000),
+                                orderBeratGram: orderBeratGram,
+                                orderBeratKgDisplay: beratKgDisplay,
                                 shippingRates: shippingRates || []
                             };
                             pendingOrder = custSession.pendingOrder;
@@ -944,14 +1003,31 @@ async function startWhatsAppBot(userId, onStatus) {
                         if (!selectedRate) selectedRate = pendingOrder.shippingRates[0];
                     }
 
-                    const ratePerKg = Number(selectedRate ? (selectedRate.cost || selectedRate.price || 0) : 0);
-                    ongkirFinal = ratePerKg;
+                    // Jika rate belum ada dan ada destId, coba kalkulasi real-time sekali lagi
+                    if (!selectedRate && (pendingOrder.destId || custSession.lastDestination?.destId)) {
+                        const targetDestId = pendingOrder.destId || custSession.lastDestination?.destId;
+                        const wGram = pendingOrder.orderBeratGram || 1000;
+                        try {
+                            const freshRates = await calculateShipping(targetDestId, wGram);
+                            if (freshRates && freshRates.length > 0) {
+                                if (kurirDipilih.includes('J&T')) {
+                                    selectedRate = freshRates.find(r => (r.name || r.courier || '').toLowerCase().includes('jnt') || (r.name || r.courier || '').toLowerCase().includes('j&t'));
+                                } else {
+                                    selectedRate = freshRates.find(r => (r.name || r.courier || '').toLowerCase().includes('jne'));
+                                }
+                                if (!selectedRate) selectedRate = freshRates[0];
+                            }
+                        } catch (e) {}
+                    }
+
+                    const rateCost = Number(selectedRate ? (selectedRate.cost || selectedRate.price || 0) : 0);
+                    ongkirFinal = rateCost;
                     grandTotalFinal = (pendingOrder.totalBarang || 0) + ongkirFinal;
                     hargaBarangDisplay = (pendingOrder.totalBarang || 0).toLocaleString('id-ID');
 
                     // Bersihkan cache setelah dipakai
                     custSession.pendingOrder = null;
-                    console.log(`✅ Invoice dari pendingOrder: ${produk}, harga: ${pendingOrder.totalBarang}, ongkir: ${ongkirFinal}`);
+                    console.log(`✅ Invoice dari pendingOrder: ${produk}, berat: ${pendingOrder.orderBeratGram || 'unknown'}g, harga: ${pendingOrder.totalBarang}, ongkir: ${ongkirFinal}`);
 
                 } else {
                     // Fallback cerdas HANYA dari pesan AI terakhir dalam obrolan saat ini
@@ -1109,21 +1185,47 @@ async function startWhatsAppBot(userId, onStatus) {
                             query: queryLokasi
                         };
 
-                        // STANDAR CEK ONGKIR ADALAH PER KILO (1 kg / 1.000 gram)
-                        // Kecuali jika pelanggan secara eksplisit menyebut berat tertentu di chat saat ini (misal: "ongkir 3 kg berapa")
-                        const explicitKgMatch = textMessage.match(/(\d+)\s*(?:kg|kilo)\b/i);
-                        const isExplicitPerKilo = /per[\s\-]?kilo|per[\s\-]?kg|\b1\s*(?:kg|kilo)\b/i.test(textMessage);
+                        // 1. Cek apakah percakapan membicarakan produk tertentu & kuantitas
+                        const allHistTextShip = (history.map(h => h.message || '').join(' ') + ' ' + textMessage).toLowerCase();
+                        const allHistRawShip = history.map(h => h.message || '').join('\n') + '\n' + textMessage;
 
-                        let beratKg = 1;
-                        if (explicitKgMatch && !isExplicitPerKilo) {
-                            beratKg = parseInt(explicitKgMatch[1]) || 1;
-                        } else {
-                            beratKg = 1; // Default selalu 1 kg (per kilo)
+                        const foundProduct = findMatchingProduct(textMessage, products) 
+                            || findMatchingProduct(allHistTextShip, products);
+
+                        let foundQty = 1;
+                        const qtyM = allHistTextShip.match(/(\d+)\s*(?:pcs|buah|biji|bungkus|pack|paket)/i);
+                        if (qtyM) {
+                            foundQty = parseInt(qtyM[1], 10) || 1;
                         }
-                        const totalWeight = beratKg * 1000;
-                        console.log(`⚖️ Hitung ongkir dengan berat: ${beratKg} kg (${totalWeight} gram)`);
 
-                        const shippingRates = await calculateShipping(destId, totalWeight);
+                        // Cek apakah pelanggan secara eksplisit bertanya per kilo atau berat tertentu
+                        const explicitKgMatch = textMessage.match(/(\d+)\s*(?:kg|kilo)\b/i);
+                        const isExplicitPerKilo = /per[\s\-]?kilo|per[\s\-]?kg/i.test(textMessage);
+
+                        let calcWeightGram = 1000;
+                        let beratLabel = 'estimasi per kg';
+
+                        if (isExplicitPerKilo) {
+                            calcWeightGram = 1000;
+                            beratLabel = 'per kg';
+                        } else if (explicitKgMatch) {
+                            const bKg = parseInt(explicitKgMatch[1], 10) || 1;
+                            calcWeightGram = bKg * 1000;
+                            beratLabel = `berat ${bKg} kg`;
+                        } else if (foundProduct && foundQty > 0) {
+                            const unitWeight = getProductWeight(foundProduct, 250);
+                            const totalItemGram = foundQty * unitWeight;
+                            calcWeightGram = Math.max(1000, totalItemGram);
+                            const kgFormatted = (totalItemGram / 1000).toFixed(1).replace('.0', '');
+                            beratLabel = foundQty > 1 ? `${foundQty} pcs / ${kgFormatted} kg` : (totalItemGram < 1000 ? `${totalItemGram}g (min. 1 kg)` : `${kgFormatted} kg`);
+                        } else {
+                            calcWeightGram = 1000;
+                            beratLabel = 'estimasi per kg';
+                        }
+
+                        console.log(`⚖️ Hitung ongkir tujuan=${destLabel} dengan berat: ${calcWeightGram} gram (${beratLabel})`);
+
+                        const shippingRates = await calculateShipping(destId, calcWeightGram);
 
                         if (shippingRates && shippingRates.length > 0) {
                             const filteredRates = shippingRates.filter(r => {
@@ -1141,53 +1243,70 @@ async function startWhatsAppBot(userId, onStatus) {
                                 return `• *${kurir}*: Rp ${harga} (est. ${etd || '1-3'} hari)`;
                             }).join('\n');
 
-                            const beratLabel = beratKg === 1 ? 'per kg' : `berat ${beratKg} kg`;
-                            aiReply = `Ongkir ke *${destLabel}* (${beratLabel}):\n\n${listOngkir}\n\nMau pilih *JNE REG* atau *J&T* kak? 😊`;
-
                             // =============================================
                             // Cache order context untuk SELECT_COURIER nanti
                             // =============================================
                             try {
-                                const allHistTextShip = history.map(h => h.message || '').join(' ').toLowerCase();
-                                const allHistRawShip = history.map(h => h.message || '').join('\n');
-                                let foundProduct = null, foundQty = 1;
-                                if (products && products.length > 0) {
-                                    foundProduct = products.find(p => {
-                                        const pName = (p.name || p.title || '').toLowerCase();
-                                        return pName.length > 2 && allHistTextShip.includes(pName);
-                                    });
-                                }
                                 if (foundProduct) {
-                                    const qtyM2 = allHistTextShip.match(/(\d+)\s*pcs/i) || allHistTextShip.match(/(\d+)\s*buah/i);
-                                    if (qtyM2) foundQty = parseInt(qtyM2[1]);
-
-                                    const namaM2 = (textMessage + '\n' + allHistRawShip).match(/nama\s+([a-zA-Z\s]+?)(?:\s*,|\s+alamat|\s+jl|\s+kec|\n|$)/i);
+                                    const namaM2 = allHistRawShip.match(/(?:nama|penerima|a\/n|an)\s*(?::|\s)\s*([a-zA-Z\s]+?)(?:\s+(?:nomor|no|hp|wa|alamat|jl|kec|kab|surabaya|jakarta)|,|$)/i)
+                                        || allHistRawShip.match(/nama\s+([a-zA-Z\s]+?)(?:\s*,|\s+alamat|\s+jl|\s+kec|\n|$)/i);
                                     const foundNama = namaM2 ? namaM2[1].trim() : customerName;
-                                    const alamatSrc2 = textMessage + '\n' + allHistRawShip;
-                                    const jlM2 = alamatSrc2.match(/(?:jl\.|jalan)\s+.+?(?=,\s*kec|,\s*kel|\n|$)/i);
-                                    const kecM2 = alamatSrc2.match(/kec(?:amatan)?\s*[\w\s]+/i);
+                                    const jlM2 = allHistRawShip.match(/(?:jl\.|jalan)\s+.+?(?=,\s*kec|,\s*kel|\n|$)/i);
+                                    const kecM2 = allHistRawShip.match(/kec(?:amatan)?\s*[\w\s]+/i);
+                                    const hpM2 = allHistRawShip.match(/(?:no(?:mor)?(?:\s*hp|\s*wa)?|hp|wa)?\s*[:\s]?\s*(0[89]\d{7,11}|\+?62[89]\d{7,11})/i);
                                     const foundAlamat = [jlM2?.[0], kecM2?.[0]].filter(Boolean).join(', ') || destLabel;
+                                    const foundHp = hpM2 ? hpM2[1].trim() : '';
 
-                                    const unitWeight = foundProduct?.weight || 1000;
+                                    const unitWeight = getProductWeight(foundProduct, 250);
                                     const orderTotalWeight = foundQty * unitWeight;
-                                    const orderBeratKg = Math.ceil(orderTotalWeight / 1000);
+                                    const orderBeratGram = Math.max(1000, orderTotalWeight);
+                                    const prodFullName = getProductFullName(foundProduct);
+                                    const unitPrice = Number(foundProduct.price || 0);
+                                    const totalBarang = unitPrice * foundQty;
 
                                     custSession.pendingOrder = {
-                                        produk: `${foundProduct.name || foundProduct.title} x ${foundQty} pcs`,
+                                        produk: `${prodFullName} x ${foundQty} pcs`,
                                         qty: foundQty,
-                                        hargaProduk: Number(foundProduct.price || 0),
-                                        totalBarang: Number(foundProduct.price || 0) * foundQty,
+                                        hargaProduk: unitPrice,
+                                        totalBarang: totalBarang,
                                         namaPenerima: foundNama,
                                         alamat: foundAlamat,
                                         destId: destId,
                                         destLabel: destLabel,
-                                        orderBeratKg: orderBeratKg,
+                                        orderBeratGram: orderBeratGram,
                                         shippingRates: displayRates
                                     };
-                                    console.log(`📦 pendingOrder cached (CHECK_SHIPPING): ${foundProduct.name} x${foundQty}, total: ${custSession.pendingOrder.totalBarang}`);
+                                    console.log(`📦 pendingOrder cached (CHECK_SHIPPING): ${prodFullName} x${foundQty}, total: ${totalBarang}, berat: ${orderBeratGram}g`);
+
+                                    // Tampilkan rincian pesanan dan total lengkap (Bukan sekadar list ongkir)
+                                    const grandTotalsPerCourier = displayRates.map(r => {
+                                        const oHarga = Number(r.cost || r.price || 0);
+                                        const n = (r.name || r.courier || '').toLowerCase();
+                                        const kurir = (n.includes('jnt') || n.includes('j&t')) ? 'J&T EXPRESS' : 'JNE REG';
+                                        return `   • *${kurir}*: Rp ${totalBarang.toLocaleString('id-ID')} + Rp ${oHarga.toLocaleString('id-ID')} = *Rp ${(totalBarang + oHarga).toLocaleString('id-ID')}*`;
+                                    }).join('\n');
+
+                                    aiReply = `Siap kak! Ini rincian dan total pesanannya:\n\n` +
+                                        `━━━━━━━━━━━━━━━━━\n` +
+                                        `📋 *RINCIAN PESANAN*\n` +
+                                        `━━━━━━━━━━━━━━━━━\n` +
+                                        `📦 *Produk:* ${prodFullName} x ${foundQty} pcs\n` +
+                                        `💰 *Harga Barang:* Rp ${totalBarang.toLocaleString('id-ID')} (${foundQty} x Rp ${unitPrice.toLocaleString('id-ID')})\n` +
+                                        `⚖️ *Total Berat:* ${beratLabel}\n` +
+                                        `\n🚚 *Pilihan Ongkir ke ${destLabel}:*\n${listOngkir}\n` +
+                                        `\n💳 *Estimasi Total (Barang + Ongkir):*\n${grandTotalsPerCourier}\n` +
+                                        `━━━━━━━━━━━━━━━━━\n` +
+                                        `👤 *Penerima:* ${foundNama}\n` +
+                                        `📍 *Alamat:* ${foundAlamat}\n` +
+                                        (foundHp ? `📱 *No. HP:* ${foundHp}\n` : '') +
+                                        `━━━━━━━━━━━━━━━━━\n` +
+                                        `Kakak mau pilih kirim pakai kurir yang mana? (*JNE REG* atau *J&T EXPRESS*) 😊`;
+                                } else {
+                                    aiReply = `Ongkir ke *${destLabel}* (${beratLabel}):\n\n${listOngkir}\n\nMau pilih *JNE REG* atau *J&T* kak? 😊`;
                                 }
                             } catch (cacheErr) {
                                 console.warn('⚠️ Gagal cache pendingOrder di CHECK_SHIPPING:', cacheErr.message);
+                                aiReply = `Ongkir ke *${destLabel}* (${beratLabel}):\n\n${listOngkir}\n\nMau pilih *JNE REG* atau *J&T* kak? 😊`;
                             }
                         } else {
                             aiReply = `Maaf kak, belum dapat data ongkir ke *${destLabel}* saat ini. Coba lagi sebentar ya 🙏`;
@@ -1205,35 +1324,34 @@ async function startWhatsAppBot(userId, onStatus) {
                 let autoDestLabel = "";
 
                 const allMessages = history.map(h => h.message || '').join(' ').toLowerCase();
-                const hasProductInHistory = allMessages.includes('kaos') || allMessages.includes('produk') || allMessages.includes('order') || allMessages.includes('pesan');
-                const hasAddressInMsg = /kec(?:amatan)?|jalan|jl\.|alamat/i.test(textMessage);
-                const hasNameInMsg = /nama\s+\w+/i.test(textMessage);
 
                 // Cek produk & kuantitas terlebih dahulu agar berat bisa dihitung
                 let produkOrdered = "Produk";
                 let hargaProduk = 0;
-                let unitWeight = 1000;
-                let foundProductObj = null;
-                if (products && products.length > 0) {
-                    foundProductObj = products.find(p => allMessages.includes((p.name || p.title || '').toLowerCase()));
-                    if (foundProductObj) {
-                        produkOrdered = foundProductObj.name || foundProductObj.title;
-                        hargaProduk = Number(foundProductObj.price || 0);
-                        unitWeight = foundProductObj.weight || 1000;
-                    } else {
-                        produkOrdered = products[0].name || products[0].title;
-                        hargaProduk = Number(products[0].price || 0);
-                        unitWeight = products[0].weight || 1000;
-                    }
+                let unitWeight = 250;
+                let foundProductObj = findMatchingProduct(allMessages, products);
+                if (foundProductObj) {
+                    produkOrdered = getProductFullName(foundProductObj);
+                    hargaProduk = Number(foundProductObj.price || 0);
+                    unitWeight = getProductWeight(foundProductObj, 250);
+                } else if (products && products.length > 0) {
+                    produkOrdered = getProductFullName(products[0]);
+                    hargaProduk = Number(products[0].price || 0);
+                    unitWeight = getProductWeight(products[0], 250);
                 }
                 const qtyMatch = allMessages.match(/(\d+)\s*pcs/i) || allMessages.match(/(\d+)\s*buah/i) || allMessages.match(/(\d+)\s*kg/i);
                 const qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
                 const totalBarang = hargaProduk * qty;
-                const totalWeight = qty * unitWeight;
+                const totalItemWeight = qty * unitWeight;
+                const totalWeight = Math.max(1000, totalItemWeight);
                 const beratKg = Math.ceil(totalWeight / 1000);
 
+                const hasProductInHistory = Boolean(foundProductObj) || allMessages.includes('kaos') || allMessages.includes('kripik') || allMessages.includes('beli') || allMessages.includes('pesan') || allMessages.includes('order');
+                const hasAddressInMsg = /kec(?:amatan)?|jalan|jl\.|alamat|surabaya|jakarta|bandung|semarang|medan|malang|kota|kab/i.test(textMessage);
+                const hasNameInMsg = /(?:nama|penerima|a\/n|an)\s*(?::|\s)\s*[a-zA-Z]/i.test(textMessage) || /penerima\s+[a-zA-Z]/i.test(textMessage);
+
                 try {
-                    const queryLokasi = intentData.location; 
+                    const queryLokasi = intentData.location || extractLokasiFromText(textMessage); 
                     if (queryLokasi && queryLokasi.length >= 3) {
                         console.log(`🚀 Auto-hitung ongkir: "${queryLokasi}"`);
                         const destinations = await searchDestination(queryLokasi);
@@ -1255,9 +1373,13 @@ async function startWhatsAppBot(userId, onStatus) {
                     console.warn("⚠️ Auto-shipping gagal:", shippingErr.message);
                 }
 
-                if (hasAddressInMsg && hasNameInMsg && hasProductInHistory && autoShippingRates) {
-                    const namaMatch = textMessage.match(/nama\s+([a-zA-Z\s]+?)(?:\s+alamat|\s+jl|\s+kec|$)/i);
+                if ((hasAddressInMsg || autoShippingRates) && (hasNameInMsg || textMessage.toLowerCase().includes('penerima')) && hasProductInHistory && autoShippingRates) {
+                    const namaMatch = textMessage.match(/(?:nama|penerima|a\/n|an)\s*(?::|\s)\s*([a-zA-Z\s]+?)(?:\s+(?:nomor|no|hp|wa|alamat|jl|kec|kab|surabaya|jakarta)|,|$)/i)
+                        || textMessage.match(/nama\s+([a-zA-Z\s]+?)(?:\s+alamat|\s+jl|\s+kec|$)/i);
                     const namaPenerima = namaMatch ? namaMatch[1].trim() : customerName;
+
+                    const hpMatch = textMessage.match(/(?:no(?:mor)?(?:\s*hp|\s*wa)?|hp|wa)?\s*[:\s]?\s*(0[89]\d{7,11}|\+?62[89]\d{7,11})/i);
+                    const noHpCustomer = hpMatch ? hpMatch[1].trim() : '';
 
                     function singkatKurir(name, service) {
                         const n = (name || '').toLowerCase();
@@ -1298,23 +1420,28 @@ async function startWhatsAppBot(userId, onStatus) {
                         return `  • *${kurir}*: Rp ${harga} (${etd})`;
                     }).join('\n');
 
-                    const alamatBersih = textMessage
-                        .replace(/^nama\s+\w[\w\s]*?(?=alamat|jl|kec|kab|jalan)/i, '')
-                        .replace(/^\s*alamat\s*/i, '')
+                    let alamatBersih = textMessage
+                        .replace(/(?:nama|penerima|a\/n|an)\s*(?::|\s)\s*[a-zA-Z\s]+?(?=\s+(?:nomor|no|hp|wa|alamat|jl|kec)|,|$)/i, '')
+                        .replace(/(?:no(?:mor)?(?:\s*hp|\s*wa)?|hp|wa)?\s*[:\s]?\s*(?:0[89]\d{7,11}|\+?62[89]\d{7,11})/i, '')
+                        .replace(/^\s*alamat\s*[:\s]?/i, '')
                         .trim();
+                    if (!alamatBersih || alamatBersih.length < 3) {
+                        alamatBersih = autoDestLabel || 'Alamat tujuan pengiriman';
+                    }
 
-                    aiReply = `Siap kak! Ini invoice pesanannya:\n\n` +
+                    aiReply = `Siap kak! Ini rincian dan total pesanannya:\n\n` +
                         `━━━━━━━━━━━━━━━━━\n` +
-                        `📋 *INVOICE PESANAN*\n` +
+                        `📋 *RINCIAN PESANAN*\n` +
                         `━━━━━━━━━━━━━━━━━\n` +
-                        `📦 Produk: ${produkOrdered} x ${qty} pcs\n` +
-                        `💰 Harga Barang: Rp ${totalBarang.toLocaleString('id-ID')}\n` +
+                        `📦 *Produk:* ${produkOrdered} x ${qty} pcs\n` +
+                        `💰 *Harga Barang:* Rp ${totalBarang.toLocaleString('id-ID')} (${qty} x Rp ${hargaProduk.toLocaleString('id-ID')})\n` +
                         `\n🚚 *Pilihan Ongkir ke ${autoDestLabel}:*\n${opsiOngkir}\n` +
-                        `\n💳 *Total dengan kurir termurah (${kurirTerpilih}):*\n` +
+                        `\n💳 *Estimasi Total dengan kurir termurah (${kurirTerpilih}):*\n` +
                         `   Rp ${totalBarang.toLocaleString('id-ID')} + Rp ${ongkirHarga.toLocaleString('id-ID')} = *Rp ${grandTotal.toLocaleString('id-ID')}*\n` +
                         `━━━━━━━━━━━━━━━━━\n` +
-                        `👤 Penerima: ${namaPenerima}\n` +
-                        `📍 Alamat: ${alamatBersih}\n` +
+                        `👤 *Penerima:* ${namaPenerima}\n` +
+                        `📍 *Alamat:* ${alamatBersih}\n` +
+                        (noHpCustomer ? `📱 *No. HP:* ${noHpCustomer}\n` : '') +
                         `━━━━━━━━━━━━━━━━━\n` +
                         `Kakak mau pilih kurir yang mana? (Bisa pilih **JNE REG** atau **J&T EXPRESS**) 😊`;
                         
@@ -1400,11 +1527,7 @@ async function startWhatsAppBot(userId, onStatus) {
                 const prodQuery = sendImageTagMatch[1].trim().toLowerCase();
                 aiReply = aiReply.replace(/\[SEND_IMAGE:[^\]]+\]/gi, '').trim();
                 if (products && products.length > 0) {
-                    sendImageProduct = products.find(p => {
-                        const pName = (p.name || p.title || '').toLowerCase();
-                        const pId = String(p.id || '');
-                        return pName === prodQuery || pName.includes(prodQuery) || prodQuery.includes(pName) || pId === prodQuery;
-                    });
+                    sendImageProduct = findMatchingProduct(prodQuery, products);
                 }
             }
 
@@ -1416,18 +1539,12 @@ async function startWhatsAppBot(userId, onStatus) {
             if (!sendImageProduct && isAskingImage && products && products.length > 0) {
                 console.log(`🖼️ Deteksi eksplisit permintaan foto/gambar dari teks: "${textMessage}"`);
                 // 1. Cari produk yang namanya disebut di pesan sekarang dan memiliki foto
-                sendImageProduct = products.find(p => {
-                    const pName = (p.name || p.title || '').toLowerCase();
-                    return pName.length > 2 && lowerText.includes(pName) && p.image_url;
-                });
+                sendImageProduct = findMatchingProduct(textMessage, products?.filter(p => p.image_url));
 
                 // 2. Cari produk dari riwayat percakapan terbaru yang memiliki foto
                 if (!sendImageProduct && history && history.length > 0) {
                     const recentContext = history.slice(-6).map(h => (h.message || '').toLowerCase()).join(' ');
-                    sendImageProduct = products.find(p => {
-                        const pName = (p.name || p.title || '').toLowerCase();
-                        return pName.length > 2 && recentContext.includes(pName) && p.image_url;
-                    });
+                    sendImageProduct = findMatchingProduct(recentContext, products?.filter(p => p.image_url));
                 }
 
                 // 3. Fallback: jika toko hanya punya 1 produk atau produk pertama yang memiliki foto

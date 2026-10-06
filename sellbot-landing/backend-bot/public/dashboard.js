@@ -105,7 +105,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const planBadge = document.getElementById('currentPlanBadge');
         if (planBadge) {
-            planBadge.innerHTML = `<i class="ph-fill ph-check-circle"></i> Current Plan: ${plan.charAt(0).toUpperCase() + plan.slice(1)}`;
+            const planText = plan.toLowerCase() === 'trial' ? 'Trial (1 Hari / 100 Kredit)' : (plan.charAt(0).toUpperCase() + plan.slice(1));
+            planBadge.innerHTML = `<i class="ph-fill ph-check-circle"></i> Current Plan: ${planText}`;
+        }
+
+        // Tampilkan pop up selamat datang trial 1 hari (100 kredit) jika user pada paket trial
+        if (localStorage.getItem('showTrialWelcomeModal') === 'true' || (plan.toLowerCase() === 'trial' && !sessionStorage.getItem('trialWelcomeShown'))) {
+            setTimeout(() => {
+                if (typeof openModal === 'function') {
+                    openModal('trialWelcomeModal');
+                    sessionStorage.setItem('trialWelcomeShown', 'true');
+                    localStorage.removeItem('showTrialWelcomeModal');
+                }
+            }, 700);
         }
 
         if (storeName) {
@@ -264,8 +276,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const price = parseInt(priceStr.replace(/[^0-9]/g, ''), 10) || 0;
-        const weight = parseInt(weightStr, 10) || 0;
-        const stock = parseInt(stockStr, 10) || 0;
+        const weight = parseInt(weightStr.replace(/[^0-9]/g, ''), 10) || 250;
+        const stock = parseInt(stockStr.replace(/[^0-9]/g, ''), 10) || 0;
 
         try {
             const btn = document.querySelector('#productModal .btn-primary');
@@ -377,19 +389,64 @@ document.addEventListener('DOMContentLoaded', async () => {
                         return;
                     }
 
+                    const header = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/^["']|["']$/g, ''));
+                    let nameIdx = header.findIndex(h => h.includes('nama') || h.includes('produk') || h.includes('title') || h === 'name');
+                    let varIdx = header.findIndex(h => h.includes('varian') || h.includes('variant'));
+                    let priceIdx = header.findIndex(h => h.includes('harga') || h.includes('price'));
+                    let weightIdx = header.findIndex(h => h.includes('berat') || h.includes('weight') || h.includes('gram'));
+                    let stockIdx = header.findIndex(h => h.includes('stok') || h.includes('stock') || h.includes('qty'));
+
                     const rows = lines.slice(1);
                     const newProducts = [];
                     for (const row of rows) {
                         const cols = row.split(',').map(c => c.trim().replace(/^["']|["']$/g, ''));
                         if (cols.length >= 2) {
-                            newProducts.push({
-                                user_id: window.currentUserId,
-                                name: cols[0],
-                                variant: cols[1] || '',
-                                price: parseInt(cols[2]?.replace(/[^0-9]/g, ''), 10) || 100000,
-                                weight: parseInt(cols[3]?.replace(/[^0-9]/g, ''), 10) || 500,
-                                stock: parseInt(cols[4]?.replace(/[^0-9]/g, ''), 10) || 50
-                            });
+                            let name = '';
+                            let variant = '';
+                            let price = 100000;
+                            let weight = 250;
+                            let stock = 50;
+
+                            if (nameIdx !== -1) {
+                                name = cols[nameIdx] || '';
+                                variant = varIdx !== -1 ? (cols[varIdx] || '') : '';
+                                if (priceIdx !== -1 && cols[priceIdx]) price = parseInt(cols[priceIdx].replace(/[^0-9]/g, ''), 10) || 100000;
+                                if (weightIdx !== -1 && cols[weightIdx]) {
+                                    const wm = cols[weightIdx].match(/\d+/);
+                                    weight = wm ? parseInt(wm[0], 10) : 250;
+                                }
+                                if (stockIdx !== -1 && cols[stockIdx]) stock = parseInt(cols[stockIdx].replace(/[^0-9]/g, ''), 10) || 50;
+                            } else {
+                                // Jika tidak ada header terdeteksi, periksa apakah kolom 0 adalah nomor urut (1, 2, 3...)
+                                const col0IsNum = /^\d+$/.test(cols[0]);
+                                if (col0IsNum && cols[1]) {
+                                    name = cols[1];
+                                    variant = cols[2] && isNaN(cols[2].replace(/[^0-9]/g, '')) ? cols[2] : '';
+                                    const nextIdx = variant ? 3 : 2;
+                                    price = parseInt(cols[nextIdx]?.replace(/[^0-9]/g, ''), 10) || 100000;
+                                    const wm = cols[nextIdx + 1]?.match(/\d+/);
+                                    weight = wm ? parseInt(wm[0], 10) : 250;
+                                    stock = parseInt(cols[nextIdx + 2]?.replace(/[^0-9]/g, ''), 10) || 50;
+                                } else {
+                                    name = cols[0];
+                                    variant = cols[1] || '';
+                                    price = parseInt(cols[2]?.replace(/[^0-9]/g, ''), 10) || 100000;
+                                    const wm = cols[3]?.match(/\d+/);
+                                    weight = wm ? parseInt(wm[0], 10) : 250;
+                                    stock = parseInt(cols[4]?.replace(/[^0-9]/g, ''), 10) || 50;
+                                }
+                            }
+
+                            if (name) {
+                                newProducts.push({
+                                    user_id: window.currentUserId,
+                                    name,
+                                    variant,
+                                    price,
+                                    weight,
+                                    stock
+                                });
+                            }
                         }
                     }
 
@@ -1268,7 +1325,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 <td>${imgContent}</td>
                                 <td><strong>${p.name}</strong></td>
                                 <td>${p.variant || '-'}</td>
-                                <td>Rp ${p.price.toLocaleString('id-ID')}</td>
+                                <td class="price-cell" style="white-space: nowrap;">Rp&nbsp;${p.price.toLocaleString('id-ID')}</td>
                                 <td>${p.weight || 0}g</td>
                                 <td><span class="stock-badge ${stockClass}">${p.stock}</span></td>
                                 <td>
@@ -1364,7 +1421,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const userPlan = localStorage.getItem('user_plan') || 'Starter';
             let totalQuota = 3000;
             const planLower = userPlan.toLowerCase();
-            if (planLower === 'trial') totalQuota = 1000;
+            if (planLower === 'trial') totalQuota = 100;
             else if (planLower === 'starter') totalQuota = 3000;
             else if (planLower === 'pro') totalQuota = 8000;
             else if (planLower === 'business') totalQuota = 20000;

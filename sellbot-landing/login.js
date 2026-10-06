@@ -42,8 +42,27 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleAuth('login');
     }
 
-    // Handle Register
-    const registerForm = document.getElementById('registerForm');
+    // Trial Notice Modal Logic
+    window.openTrialNoticeModal = function () {
+        const modal = document.getElementById('trialNoticeModal');
+        if (modal) modal.classList.add('active');
+    };
+
+    window.closeTrialNoticeModal = function () {
+        const modal = document.getElementById('trialNoticeModal');
+        if (modal) modal.classList.remove('active');
+    };
+
+    // Tampilkan pop up ketentuan trial saat membuka form pendaftaran
+    if (registerForm && registerForm.classList.contains('active')) {
+        setTimeout(() => {
+            if (!sessionStorage.getItem('trialNoticeShown')) {
+                openTrialNoticeModal();
+                sessionStorage.setItem('trialNoticeShown', 'true');
+            }
+        }, 400);
+    }
+
     if (registerForm) {
         registerForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -82,19 +101,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     options: {
                         data: {
                             store_name: name,
-                            phone: wa
+                            phone: wa,
+                            plan: 'Trial'
                         }
                     }
                 });
 
                 if (error) throw error;
 
-                // Optional: Initialize local storage values as fallback if needed for UI
+                // Set nilai awal trial: 1 hari dengan 100 kredit WA
                 localStorage.setItem('isRegistered', 'true');
-                localStorage.setItem('freeChatsLeft', '50');
+                localStorage.setItem('freeChatsLeft', '100');
+                localStorage.setItem('user_plan', 'Trial');
                 localStorage.setItem('storeName', name);
+                localStorage.setItem('showTrialWelcomeModal', 'true');
                 
-                // Karena trigger database sudah mengkonfirmasi email, kita bisa langsung login
+                // Login otomatis
                 const { data: loginData, error: loginError } = await window.supabaseClient.auth.signInWithPassword({
                     email: email,
                     password: password
@@ -102,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (loginError) throw loginError;
 
-                showToast('Pendaftaran berhasil! Mengarahkan ke Dashboard...', 'success');
+                showToast('Pendaftaran berhasil! Trial 1 Hari (100 Kredit Chat WA) telah aktif.', 'success');
                 setTimeout(() => {
                     window.location.href = 'dashboard.html';
                 }, 1500);

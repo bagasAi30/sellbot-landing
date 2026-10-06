@@ -451,6 +451,14 @@ td {
     vertical-align: middle;
 }
 
+td.price-cell,
+.price-cell,
+table th:nth-child(4),
+table td:nth-child(4) {
+    white-space: nowrap !important;
+    font-variant-numeric: tabular-nums;
+}
+
 tbody tr:last-child td {
     border-bottom: none;
 }

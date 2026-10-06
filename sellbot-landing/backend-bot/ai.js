@@ -7,17 +7,45 @@ const axios = require('axios');
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
 
+function getProductFullName(p) {
+    if (!p) return '';
+    const nameStr = String(p.name || p.title || '').trim();
+    const varStr = String(p.variant || '').trim();
+    const isNum = /^\d+$/.test(nameStr);
+    
+    // Jika name hanya angka (contoh: "1") dan varian ada isinya, nama produk sebenarnya ada di varian
+    if (isNum && varStr) {
+        return varStr;
+    }
+    if (nameStr && varStr && !nameStr.toLowerCase().includes(varStr.toLowerCase())) {
+        return `${nameStr} (${varStr})`;
+    }
+    return nameStr || varStr || 'Produk';
+}
+
+function getProductWeight(p, fallbackWeight = 250) {
+    if (!p) return fallbackWeight;
+    let w = Number(p.weight);
+    if (w > 50000) {
+        const str = String(w);
+        w = parseInt(str.substring(0, 3), 10) || fallbackWeight;
+    }
+    return (w && w > 0) ? w : fallbackWeight;
+}
+
 async function generateAIResponse(userMessage, storeRules = "", products = [], history = [], shippingInfo = "") {
     try {
         // 1. Format katalog produk
         const productCatalog = products && products.length > 0
             ? products.map(p => {
+                const nama = getProductFullName(p);
                 const harga = Number(p.price || 0).toLocaleString('id-ID');
                 const stok = p.stock ?? 'Tersedia';
-                const varian = p.variant ? ` | Varian: ${p.variant}` : '';
+                const varian = (p.variant && !nama.includes(p.variant)) ? ` | Varian: ${p.variant}` : '';
+                const berat = p.weight ? ` | Berat: ${getProductWeight(p)}g` : '';
                 const desc = p.description ? ` | ${p.description}` : '';
                 const hasPhoto = p.image_url ? ' | Foto: Tersedia' : ' | Foto: Tidak ada';
-                return `- *${p.name || p.title}*: Rp ${harga} | Stok: ${stok}${varian}${desc}${hasPhoto}`;
+                return `- *${nama}*: Rp ${harga} | Stok: ${stok}${berat}${varian}${desc}${hasPhoto}`;
             }).join('\n')
             : "Katalog produk belum diatur oleh admin toko.";
 
@@ -86,9 +114,15 @@ Contoh: "[FORWARD_TO_ADMIN] Baik kak, mohon tunggu sebentar ya. Pesan kakak seda
   3. Jika produk tersebut "Foto: Tidak ada":
      Jelaskan dengan sopan bahwa foto produk tersebut belum tersedia di katalog saat ini. JANGAN gunakan tag [SEND_IMAGE].
 
-=== MENGHITUNG TOTAL PESANAN ===
-- Jika pelanggan menanyakan total harga untuk pemesanan barang (misal: "10 pcs tiap produk total berapa?"), HITUNG TOTALNYA dengan benar (harga satuan x jumlah pesanan).
-- Sebutkan rincian perhitungannya secara singkat lalu berikan total akhirnya dengan format Rupiah yang benar.
+=== MENGHITUNG TOTAL PESANAN (WAJIB AKURAT) ===
+- Jika pelanggan menanyakan total harga atau memesan barang dengan jumlah tertentu (misal: "Beli kripik 10 pcs", "10 pcs tiap produk berapa?", "pesan 5 pcs"):
+  KAMU WAJIB MENGHITUNG TOTAL HARGA BARANG SECARA AKURAT:
+  [Jumlah pcs] x [Harga satuan per pcs di katalog] = [Total harga barang].
+  Contoh: 10 pcs x Rp 15.000 = Rp 150.000.
+- DILARANG KERAS hanya menyebut harga 1 pcs jika pelanggan memesan banyak! Total HARUS dihitung dikalikan jumlah pesanan.
+- Jika pelanggan sudah memberikan data alamat atau tujuan dan penerima (misal: "Surabaya Tambaksari penerima Ahmad nomor 0989189289"):
+  HITUNG TOTAL BARANG (misal: 10 pcs x Rp 15.000 = Rp 150.000), tampilkan pilihan kurir pengiriman (JNE REG / J&T EXPRESS), dan konfirmasi rincian pesanan.
+- DILARANG KERAS mengoper ke admin / [FORWARD_TO_ADMIN] hanya karena pelanggan memberikan alamat, nama penerima, atau nomor HP! Selesaikan perhitungannya dengan ramah dan percaya diri.
 
 === CARA MEMBUAT INVOICE ===
 Jika sudah ada semua info: produk, jumlah, nama penerima, dan alamat → buat invoice seperti ini:
@@ -131,6 +165,12 @@ Jika kamu sudah mengirim invoice dengan pilihan ongkir dan pelanggan membalas de
 - Jangan lupa tambahkan tag [SAVE_INVOICE:total_angka] di akhir.
 - Tone harus antusias seperti transaksi sudah pasti terjadi 🎉
 
+=== ATURAN BERAT PRODUK & ONGKOS KIRIM (SANGAT PENTING) ===
+- Berat produk dihitung berdasarkan berat asli per pcs (misal: 250 gram/pcs).
+- DILARANG KERAS membulatkan berat 1 pcs menjadi 1 kg jika berat per pcs belum sampai 1 kg (misal 250 gram JANGAN dibilang 1 kg)!
+- Total berat pesanan dihitung dari jumlah pesanan dikalikan berat per pcs (misal: 10 pcs x 250g = 2.500g = 2,5 kg).
+- Ekspedisi mengenakan ongkir minimal 1 kg untuk total paket di bawah 1 kg. Namun untuk pesanan banyak pcs, hitung total beratnya, BUKAN membulatkan per-pcs menjadi 1 kg!
+
 === CRITICAL OVERRIDES (ATURAN MUTLAK) ===
 1. DILARANG KERAS MENYEBUTKAN ATAU MEMBAHAS COD / BIAYA LAYANAN COD JIKA PELANGGAN TIDAK BERTANYA! Meskipun ada instruksi tentang COD di "Aturan Toko" di atas, abaikan dan simpan saja infonya.
 2. JANGAN MEMINTA FORMAT PESANAN / DATA ALAMAT JIKA PELANGGAN HANYA TANYA PRODUK ATAU UKURAN! Cukup jawab pertanyaannya.
@@ -146,6 +186,13 @@ PENTING: JANGAN PERNAH MENGGUNAKAN TAG <think>! Jawab langsung. Pastikan tidak a
             { role: "user", content: userMessage }
         ];
 
+        // 4. Request ke Groq dengan model yang cepat dan konsisten
+        const candidateModels = [
+            "qwen/qwen3.8-27b",
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b"
+        ];
+
         let content = "";
         
         if (!groq) {
@@ -153,70 +200,55 @@ PENTING: JANGAN PERNAH MENGGUNAKAN TAG <think>! Jawab langsung. Pastikan tidak a
             return "Maaf kak, layanan AI sedang dalam pemeliharaan (GROQ_API_KEY belum diset). 🙏";
         }
 
-        try {
-            const response = await groq.chat.completions.create({
-                model: "openai/gpt-oss-20b",
-                temperature: 0.1,
-                max_tokens: 1000,
-                messages: messages
-            });
-            content = response.choices[0]?.message?.content || "";
-        } catch (firstErr) {
-            console.error("⚠️ Request groq (openai/gpt-oss-20b) gagal:", firstErr.message);
+        for (const modelName of candidateModels) {
             try {
-                console.log("🔄 Mencoba fallback groq (openai/gpt-oss-120b)...");
                 const response = await groq.chat.completions.create({
-                    model: "openai/gpt-oss-120b",
-                    temperature: 0.1,
-                    max_tokens: 1000,
+                    model: modelName,
+                    temperature: 0.2,
+                    max_tokens: 1200,
                     messages: messages
                 });
-                content = response.choices[0]?.message?.content || "";
-            } catch (secondErr) {
-                console.error("⚠️ Request groq fallback (120b) gagal:", secondErr.message);
-                try {
-                    console.log("🔄 Mencoba fallback groq (qwen/qwen3.8-27b)...");
-                    const response = await groq.chat.completions.create({
-                        model: "qwen/qwen3.8-27b",
-                        temperature: 0.1,
-                        max_tokens: 1000,
-                        messages: messages
-                    });
-                    content = response.choices[0]?.message?.content || "";
-                } catch (thirdErr) {
-                    console.error("⚠️ Request groq fallback (qwen) gagal:", thirdErr.message);
-                    if (genAI) {
-                        console.log("🔄 Fallback menggunakan Gemini...");
-                        try {
-                            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-                            const prompt = messages.map(m => `${m.role === 'user' ? 'User' : m.role === 'system' ? 'System' : 'Assistant'}: ${m.content}`).join('\n\n') + '\n\nAssistant:';
-                            const result = await model.generateContent(prompt);
-                            content = (await result.response).text().trim();
-                        } catch (geminiErr) {
-                            console.error("⚠️ Request Gemini fallback gagal:", geminiErr.message);
-                        }
-                    }
+                const raw = response.choices[0]?.message?.content || "";
+                let cleaned = raw.replace(/<think>[\s\S]*?(<\/think>|$)/gi, '').trim();
+                if (!cleaned && raw.includes('<think>')) {
+                    cleaned = raw.replace(/<\/?think>/gi, '').trim();
                 }
+                if (cleaned) {
+                    content = cleaned;
+                    break;
+                }
+            } catch (err) {
+                console.warn(`⚠️ Request groq (${modelName}) gagal:`, err.message);
             }
         }
 
-        // Hapus blok <think>...</think>
-        let finalContent = content.replace(/<think>[\s\S]*?(<\/think>|$)/gi, '').trim();
-        
-        // Jika konten kosong setelah stripping (AI hanya berpikir tanpa menjawab), ambil isi pikirannya saja
-        if (!finalContent && content.includes('<think>')) {
+        if (!content && genAI) {
+            console.log("🔄 Fallback menggunakan Gemini...");
+            try {
+                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const prompt = messages.map(m => `${m.role === 'user' ? 'User' : m.role === 'system' ? 'System' : 'Assistant'}: ${m.content}`).join('\n\n') + '\n\nAssistant:';
+                const result = await model.generateContent(prompt);
+                content = (await result.response).text().trim();
+            } catch (geminiErr) {
+                console.warn("⚠️ Request Gemini fallback gagal:", geminiErr.message);
+            }
+        }
+
+        // Hapus sisa-sisa format tag
+        let finalContent = (content || '').replace(/<think>[\s\S]*?(<\/think>|$)/gi, '').trim();
+        if (!finalContent && content && content.includes('<think>')) {
             finalContent = content.replace(/<\/?think>/gi, '').trim();
         }
 
         if (!finalContent) {
-            console.warn("⚠️ AI tidak mengembalikan konten (periksa kuota/validitas GROQ_API_KEY atau GEMINI_API_KEY di .env)");
-            return "Halo kak! Terima kasih sudah menghubungi kami. Mohon ditunggu sebentar ya kak, tim admin kami akan segera membantu melayani pertanyaan kakak 🙏";
+            console.warn("⚠️ AI tidak mengembalikan konten");
+            return "Baik kak! Pesanan kakak sudah kami catat dengan baik. Boleh sebutkan pilihan kurirnya (JNE REG atau J&T EXPRESS) agar kami buatkan invoice finalnya kak? 😊";
         }
 
         return finalContent;
     } catch (error) {
         console.error("Error pada generateAIResponse (Groq):", error.message);
-        return "Halo kak! Terima kasih sudah menghubungi kami. Mohon ditunggu sebentar ya kak, tim admin kami akan segera membantu melayani pertanyaan kakak 🙏";
+        return "Baik kak! Pesanan kakak sudah kami catat dengan baik. Boleh sebutkan pilihan kurirnya (JNE REG atau J&T EXPRESS) agar kami buatkan invoice finalnya kak? 😊";
     }
 }
 
@@ -261,10 +293,11 @@ async function processImageWithGemini(base64Image, mimeType, caption = "", store
         // Format katalog produk
         const productCatalog = products && products.length > 0
             ? products.map(p => {
+                const nama = getProductFullName(p);
                 const harga = Number(p.price || 0).toLocaleString('id-ID');
                 const stok = p.stock ?? 'Tersedia';
-                const varian = p.variant ? ` | Varian: ${p.variant}` : '';
-                return `- *${p.name || p.title}*: Rp ${harga} | Stok: ${stok}${varian}`;
+                const varian = (p.variant && !nama.includes(p.variant)) ? ` | Varian: ${p.variant}` : '';
+                return `- *${nama}*: Rp ${harga} | Stok: ${stok}${varian}`;
             }).join('\n')
             : "";
 
@@ -531,17 +564,22 @@ async function extractOrderDetails(userMessage, history = [], storeRules = "", p
             .join('\n');
 
         const productCatalogSnippet = products && products.length > 0
-            ? products.map(p => `- ${p.name || p.title}: Rp ${Number(p.price || 0).toLocaleString('id-ID')}`).join('\n')
+            ? products.map(p => {
+                const nama = getProductFullName(p);
+                const berat = p.weight ? ` (${getProductWeight(p)}g)` : '';
+                return `- ${nama}${berat}: Rp ${Number(p.price || 0).toLocaleString('id-ID')}`;
+            }).join('\n')
             : '';
 
         const prompt = `Kamu adalah sistem AI Order Extractor untuk toko online WhatsApp.
 Tugasmu: Mengekstrak data pesanan yang SEDANG aktif dibahas dari percakapan WhatsApp terkini.
 PERATURAN PENTING:
-1. Fokus HANYA pada produk yang SEDANG dibicarakan atau dipesan saat ini di chat terkini (misal: "Paket Umbul-Umbul Promo", "Umbul-Umbul", dll).
+1. Fokus HANYA pada produk yang SEDANG dibicarakan atau dipesan saat ini di chat terkini (misal: "Paket Umbul-Umbul Promo", "Kripik Singkong Balado", dll).
 2. DILARANG KERAS mengambil nama produk lama (seperti kaos, sepatu, dll) yang pernah ada di riwayat lampau jika percakapan terkini membicarakan produk baru!
 3. Jika di pesan terakhir AI menyebutkan total harga (contoh: "10 paket Umbul-Umbul = Rp 1.100.000"), maka produk = "Paket Umbul-Umbul Promo", qty = 10, unit = "paket", total_harga_barang = 1100000.
 4. Ekstrak nama penerima, alamat lengkap, dan perbaiki typo nama lokasi (kecamatan/kota tujuan pengiriman, misal: "tambakasari surabaya" -> "Tambaksari, Surabaya").
 5. Deteksi kurir pilihan pelanggan jika disebutkan di pesan (misal: "JNE REG" atau "J&T EXPRESS").
+6. JANGAN membulatkan berat barang per pcs ke 1 kg jika berat asli belum sampai 1 kg (misal 250 gram tetap 250 gram). Total berat dihitung dari qty dikali berat satuan.
 
 Riwayat Chat Terkini:
 ${recentHistory}
@@ -612,4 +650,4 @@ Format balasanmu WAJIB berupa JSON valid persis seperti ini (tanpa markdown tamb
     }
 }
 
-module.exports = { generateAIResponse, processImageWithGemini, extractIntentWithGemini, extractIntentRuleBased, extractOrderDetails, cleanAndValidateLocation };
+module.exports = { generateAIResponse, processImageWithGemini, extractIntentWithGemini, extractIntentRuleBased, extractOrderDetails, cleanAndValidateLocation, getProductFullName, getProductWeight };
