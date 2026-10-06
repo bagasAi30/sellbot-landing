@@ -71,16 +71,17 @@ async function searchDestination(query) {
 /**
  * Menghitung ongkos kirim berdasarkan destinationId dan weight (gram)
  */
-async function calculateShipping(destinationId, weight) {
+async function calculateShipping(destinationId, weight, originId = null) {
     try {
+        const activeOrigin = originId || STORE_ORIGIN_ID;
         const payload = new URLSearchParams({
-            origin: String(STORE_ORIGIN_ID),
+            origin: String(activeOrigin),
             destination: String(destinationId),
             weight: String(weight > 0 ? weight : 1000),
             courier: 'jne:jnt'  // Hanya JNE dan J&T
         });
 
-        console.log(`📮 Calculate shipping: origin=${STORE_ORIGIN_ID} dest=${destinationId} weight=${weight}`);
+        console.log(`📮 Calculate shipping: origin=${activeOrigin} dest=${destinationId} weight=${weight}`);
 
         const response = await axios.post('https://rajaongkir.komerce.id/api/v1/calculate/domestic-cost', payload.toString(), {
             headers: {

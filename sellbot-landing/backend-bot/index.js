@@ -75,6 +75,31 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// Pengaturan Lokasi Asal Pengiriman Toko per User (Persisten ke file JSON & Supabase)
+const userOriginsFilePath = path.join(__dirname, 'user-origins.json');
+function getUserOrigins() {
+    try {
+        if (fs.existsSync(userOriginsFilePath)) {
+            return JSON.parse(fs.readFileSync(userOriginsFilePath, 'utf8'));
+        }
+    } catch (e) {
+        console.error('Gagal membaca user-origins.json:', e);
+    }
+    return {};
+}
+
+function saveUserOrigin(uId, originData) {
+    try {
+        const all = getUserOrigins();
+        all[uId] = originData;
+        fs.writeFileSync(userOriginsFilePath, JSON.stringify(all, null, 2), 'utf8');
+        return true;
+    } catch (e) {
+        console.error('Gagal menulis user-origins.json:', e);
+        return false;
+    }
+}
+
 const serverStartTime = Date.now();
 
 // In-Memory Server Log Buffer (Ring buffer 150 entries)
@@ -684,10 +709,30 @@ async function startWhatsAppBot(userId, onStatus) {
         });
 
         try {
-            // Gabungkan system_prompt (AI Persona) + store_rules menjadi satu konteks
+            // Ambil Lokasi Asal Pengiriman Toko (per tenant/user)
+            let userStoreOriginId = null;
+            let userStoreOriginName = 'Surabaya';
+            const userOriginsMap = getUserOrigins();
+            if (userOriginsMap[userId]?.originId) {
+                userStoreOriginId = userOriginsMap[userId].originId;
+                userStoreOriginName = userOriginsMap[userId].originName || 'Surabaya';
+            } else if (kb) {
+                const originMatch = (kb.store_rules || kb.system_prompt || '').match(/ORIGIN_ID:\s*(\d+)/i);
+                if (originMatch) {
+                    userStoreOriginId = originMatch[1];
+                    const nameMatch = (kb.store_rules || kb.system_prompt || '').match(/ORIGIN_NAME:\s*([^\n\r]+)/i);
+                    if (nameMatch) userStoreOriginName = nameMatch[1].trim();
+                }
+            }
+            if (!userStoreOriginId) {
+                userStoreOriginId = process.env.STORE_ORIGIN_ID || 254;
+            }
+
+            // Gabungkan system_prompt (AI Persona) + store_rules + Asal Pengiriman Toko menjadi satu konteks
             const storeRules = [
                 kb?.system_prompt ? `=== PERSONA AI (PRIORITAS UTAMA) ===\n${kb.system_prompt}` : '',
-                kb?.store_rules ? `=== ATURAN & INFO TOKO ===\n${kb.store_rules}` : ''
+                kb?.store_rules ? `=== ATURAN & INFO TOKO ===\n${kb.store_rules}` : '',
+                `=== ASAL PENGIRIMAN TOKO ===\nAsal Pengiriman: ${userStoreOriginName} (Origin ID: ${userStoreOriginId})\nCatatan: Semua ongkos kirim otomatis dihitung dari lokasi asal ${userStoreOriginName} ke kota/kecamatan pembeli.`
             ].filter(Boolean).join('\n\n') || 'Layani pelanggan dengan ramah dan profesional.';
 
 
@@ -941,7 +986,7 @@ async function startWhatsAppBot(userId, onStatus) {
                                         const target = destinations[0];
                                         destId = target.id || target.subdistrict_id || target.city_id;
                                         destLabel = target.label || targetLokasi;
-                                        shippingRates = await calculateShipping(destId, orderBeratGram);
+                                        shippingRates = await calculateShipping(destId, orderBeratGram, userStoreOriginId);
                                     }
                                 } catch (sErr) {
                                     console.warn('⚠️ Gagal hitung tarif ongkir:', sErr.message);
@@ -950,7 +995,7 @@ async function startWhatsAppBot(userId, onStatus) {
 
                             if (!shippingRates && destId) {
                                 try {
-                                    shippingRates = await calculateShipping(destId, orderBeratGram);
+                                    shippingRates = await calculateShipping(destId, orderBeratGram, userStoreOriginId);
                                 } catch (e) {}
                             }
 
@@ -1008,7 +1053,7 @@ async function startWhatsAppBot(userId, onStatus) {
                         const targetDestId = pendingOrder.destId || custSession.lastDestination?.destId;
                         const wGram = pendingOrder.orderBeratGram || 1000;
                         try {
-                            const freshRates = await calculateShipping(targetDestId, wGram);
+                            const freshRates = await calculateShipping(targetDestId, wGram, userStoreOriginId);
                             if (freshRates && freshRates.length > 0) {
                                 if (kurirDipilih.includes('J&T')) {
                                     selectedRate = freshRates.find(r => (r.name || r.courier || '').toLowerCase().includes('jnt') || (r.name || r.courier || '').toLowerCase().includes('j&t'));
@@ -1225,7 +1270,7 @@ async function startWhatsAppBot(userId, onStatus) {
 
                         console.log(`⚖️ Hitung ongkir tujuan=${destLabel} dengan berat: ${calcWeightGram} gram (${beratLabel})`);
 
-                        const shippingRates = await calculateShipping(destId, calcWeightGram);
+                        const shippingRates = await calculateShipping(destId, calcWeightGram, userStoreOriginId);
 
                         if (shippingRates && shippingRates.length > 0) {
                             const filteredRates = shippingRates.filter(r => {
@@ -1359,7 +1404,7 @@ async function startWhatsAppBot(userId, onStatus) {
                             const target = destinations[0];
                             const destId = target.id || target.subdistrict_id || target.city_id;
                             autoDestLabel = target.label || target.subdistrict_name || target.city_name || queryLokasi;
-                            const rates = await calculateShipping(destId, totalWeight);
+                            const rates = await calculateShipping(destId, totalWeight, userStoreOriginId);
                             if (rates && rates.length > 0) {
                                 autoShippingRates = rates;
                                 autoShippingInfo = `Tujuan: ${autoDestLabel} (Berat ${beratKg} kg)\n` + rates.slice(0, 3).map(r =>
@@ -2422,6 +2467,67 @@ async function startWhatsAppBot(userId, onStatus) {
                 cleanupOldChats(30).catch(() => {});
             }, 24 * 60 * 60 * 1000);
         }, 15000);
+
+        // --- Shipping & Origin Endpoints ---
+        // 1. Cari Kota / Destinasi Domestik untuk Asal Toko & Pembeli (RajaOngkir Komerce)
+        app.get('/api/shipping/destination', async (req, res) => {
+            const search = req.query.search;
+            if (!search || String(search).trim().length < 2) {
+                return res.status(400).json({ success: false, message: 'Parameter search minimal 2 karakter.' });
+            }
+            try {
+                const results = await searchDestination(String(search).trim());
+                res.json({ success: true, data: results || [] });
+            } catch (err) {
+                res.status(500).json({ success: false, message: err.message });
+            }
+        });
+
+        // 2. Ambil Asal Pengiriman Toko per User
+        app.get('/api/shipping/origin/:userId', (req, res) => {
+            const { userId } = req.params;
+            const all = getUserOrigins();
+            const data = all[userId] || { originId: process.env.STORE_ORIGIN_ID || 254, originName: 'Surabaya (Default)' };
+            res.json({ success: true, data });
+        });
+
+        // 3. Simpan Asal Pengiriman Toko per User (ke user-origins.json & sync ke Supabase knowledge_base)
+        app.post('/api/shipping/origin', async (req, res) => {
+            const { userId, originId, originName } = req.body;
+            if (!userId) return res.status(400).json({ success: false, message: 'userId diperlukan.' });
+
+            const originData = {
+                originId: Number(originId) || 254,
+                originName: String(originName || 'Surabaya').trim(),
+                updatedAt: new Date().toISOString()
+            };
+
+            saveUserOrigin(userId, originData);
+
+            // Best-effort sinkronisasi ke Supabase knowledge_base
+            try {
+                const { data: existing } = await supabase
+                    .from('knowledge_base')
+                    .select('store_rules')
+                    .eq('user_id', userId)
+                    .single();
+
+                let rules = existing?.store_rules || '';
+                rules = rules.replace(/===ASAL_PENGIRIMAN===[\s\S]*?===END_ASAL_PENGIRIMAN===\n?/g, '').trim();
+                rules = `${rules}\n\n===ASAL_PENGIRIMAN===\nORIGIN_ID: ${originData.originId}\nORIGIN_NAME: ${originData.originName}\n===END_ASAL_PENGIRIMAN===`.trim();
+
+                await supabase
+                    .from('knowledge_base')
+                    .upsert({
+                        user_id: userId,
+                        store_rules: rules
+                    }, { onConflict: 'user_id' });
+            } catch (sbErr) {
+                console.warn('⚠️ Gagal sync origin ke Supabase:', sbErr.message);
+            }
+
+            res.json({ success: true, data: originData });
+        });
 
         // Health check endpoint
         app.get('/health', (req, res) => {

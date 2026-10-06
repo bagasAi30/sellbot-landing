@@ -62,9 +62,9 @@ async function searchDestination(searchQuery) {
  * @param {number} weightInGrams - Berat paket dalam gram (default: 1000g = 1kg)
  * @param {string} courier - Kurir yang dicek (default: 'jnt:jne:sicepat')
  */
-async function calculateShipping(destinationSearch, weightInGrams = 1000, courier = 'jnt:jne:sicepat') {
+async function calculateShipping(destinationSearch, weightInGrams = 1000, courier = 'jnt:jne:sicepat', originId = null) {
     try {
-        console.log(`[Shipping] Mencari ongkir ke: "${destinationSearch}" (Berat: ${weightInGrams}g)`);
+        console.log(`[Shipping] Mencari ongkir ke: "${destinationSearch}" (Berat: ${weightInGrams}g, Origin: ${originId || STORE_ORIGIN_ID})`);
         
         // 1. Dapatkan info destinasi
         const dest = await searchDestination(destinationSearch);
@@ -79,7 +79,7 @@ async function calculateShipping(destinationSearch, weightInGrams = 1000, courie
         const costRes = await axios.post(
             'https://rajaongkir.komerce.id/api/v1/calculate/domestic-cost',
             new URLSearchParams({
-                origin: STORE_ORIGIN_ID,
+                origin: String(originId || STORE_ORIGIN_ID),
                 destination: dest.id,
                 weight: weightInGrams,
                 courier: courier

@@ -431,6 +431,67 @@
             <!-- Settings & Configuration Cards -->
             <div class="kb-config-grid">
 
+                <!-- Card: Asal Pengiriman Toko (Opsional / AI Shipping Origin) -->
+                <div class="kb-card origin-card" style="grid-column: 1 / -1; margin-bottom: 24px;">
+                    <div class="kb-card-header">
+                        <div class="kb-card-title-group">
+                            <div class="kb-card-icon" style="background: rgba(16, 185, 129, 0.12); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.25);">
+                                <i class="ph-fill ph-map-pin"></i>
+                            </div>
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <h3 class="kb-card-title" style="margin: 0;">Asal Pengiriman Toko</h3>
+                                    <span style="font-size: 11px; font-weight: 600; background: rgba(100, 116, 139, 0.12); color: var(--text-secondary); padding: 2px 8px; border-radius: 99px;">Opsional</span>
+                                </div>
+                                <p class="kb-card-subtitle">Tentukan kota atau kecamatan asal pengiriman barang agar bot AI menghitung biaya ongkir kurir (JNE & J&T) secara otomatis dari lokasi toko Anda</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Status Lokasi Asal Aktif -->
+                    <div class="origin-status-box">
+                        <div class="origin-status-info">
+                            <div class="origin-status-icon">
+                                <i class="ph-fill ph-navigation-arrow"></i>
+                            </div>
+                            <div>
+                                <span class="origin-status-subtitle">Lokasi Pengiriman Saat Ini</span>
+                                <strong id="activeOriginNameDisplay" class="origin-status-title">Surabaya (Default)</strong>
+                            </div>
+                        </div>
+                        <div class="origin-status-actions">
+                            <button type="button" class="btn btn-outline btn-small" id="btnResetOrigin" title="Kembalikan ke Default Surabaya">
+                                <i class="ph ph-arrow-counter-clockwise"></i> Reset ke Default
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Input Pencarian Lokasi Asal -->
+                    <div class="kb-form-group">
+                        <label class="kb-label">Pilih Kota / Kecamatan Asal Pengirim</label>
+                        <div class="origin-search-wrapper">
+                            <div style="flex: 1; position: relative;">
+                                <input type="text" id="inputOriginSearch" class="form-control" placeholder="Ketik nama kota atau kecamatan (contoh: Jakarta Barat, Bandung, Tambaksari Surabaya...)" autocomplete="off">
+                                <input type="hidden" id="selectedOriginId" value="254">
+                                <input type="hidden" id="selectedOriginName" value="Surabaya">
+                                <div id="originSearchDropdown" class="origin-dropdown-list" style="display: none;"></div>
+                            </div>
+                            <button type="button" class="btn btn-primary" id="btnSearchOriginAction" style="white-space: nowrap;">
+                                <i class="ph ph-magnifying-glass"></i> Cari Kota
+                            </button>
+                        </div>
+                        <span class="kb-hint">
+                            <i class="ph ph-info"></i> Pilih kota atau kecamatan spesifik dari rekomendasi agar otomatis terhubung dengan tarif resmi ekspedisi Komerce/RajaOngkir.
+                        </span>
+                    </div>
+
+                    <div class="kb-card-footer" style="display: flex; justify-content: flex-end; margin-top: 14px;">
+                        <button type="button" id="btnSaveOriginSetting" class="btn btn-primary">
+                            <i class="ph ph-floppy-disk"></i> Simpan Asal Pengiriman
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Card: AI Chat Prompt & Instruksi -->
                 <div class="kb-card ai-card" style="grid-column: 1 / -1;">
                     <div class="kb-card-header">

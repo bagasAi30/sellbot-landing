@@ -227,9 +227,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const btnSysPrompt = document.getElementById('btnSaveSystemPrompt');
             const btnKnowledge = document.getElementById('btnSaveKnowledge');
+            const btnOrigin = document.getElementById('btnSaveOriginSetting');
 
             if (btnSysPrompt) await btnSysPrompt.click();
             if (btnKnowledge) await btnKnowledge.click();
+            if (btnOrigin) await btnOrigin.click();
 
             setTimeout(() => {
                 showToast('Semua data pengetahuan toko berhasil disimpan!', 'success');
@@ -501,12 +503,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const { data: { session } } = await window.supabaseClient.auth.getSession();
                 const user_id = session.user.id;
 
+                // Ambil store_rules yang ada agar tidak terhapus (termasuk tag asal pengiriman)
+                const { data: existingKb } = await window.supabaseClient
+                    .from('knowledge_base')
+                    .select('store_rules')
+                    .eq('user_id', user_id)
+                    .single();
+
                 const { error } = await window.supabaseClient
                     .from('knowledge_base')
                     .upsert({
                         user_id: user_id,
                         system_prompt: content,
-                        store_rules: ''
+                        store_rules: existingKb?.store_rules || ''
                     }, { onConflict: 'user_id' });
 
                 if (!error) showToast('System Prompt berhasil disimpan! AI akan otomatis mengikuti instruksi ini.', 'success');
@@ -519,7 +528,171 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Save Knowledge Base Detailed Context
+    // =============================================
+    // 1B. PENGATURAN ASAL PENGIRIMAN TOKO (ORIGIN)
+    // =============================================
+    function initOriginSettings() {
+        const inputSearch = document.getElementById('inputOriginSearch');
+        const btnSearch = document.getElementById('btnSearchOriginAction');
+        const dropdown = document.getElementById('originSearchDropdown');
+        const idInput = document.getElementById('selectedOriginId');
+        const nameInput = document.getElementById('selectedOriginName');
+        const activeDisplay = document.getElementById('activeOriginNameDisplay');
+        const btnSave = document.getElementById('btnSaveOriginSetting');
+        const btnReset = document.getElementById('btnResetOrigin');
+
+        let debounceTimer = null;
+
+        async function performOriginSearch(query) {
+            if (!query || query.trim().length < 2) {
+                if (dropdown) dropdown.style.display = 'none';
+                return;
+            }
+
+            if (dropdown) {
+                dropdown.style.display = 'block';
+                dropdown.innerHTML = '<div class="origin-dropdown-empty"><i class="ph ph-spinner ph-spin"></i> Mencari kota / kecamatan...</div>';
+            }
+
+            try {
+                const res = await fetch(`/api/shipping/destination?search=${encodeURIComponent(query.trim())}`);
+                const json = await res.json();
+                const list = json?.data || [];
+
+                if (!dropdown) return;
+
+                if (list.length === 0) {
+                    dropdown.innerHTML = '<div class="origin-dropdown-empty">Kota/kecamatan tidak ditemukan. Coba kata kunci lain.</div>';
+                    return;
+                }
+
+                dropdown.innerHTML = '';
+                list.slice(0, 10).forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'origin-dropdown-item';
+                    const labelText = item.label || `${item.subdistrict_name || ''}, ${item.city_name || ''}`;
+                    div.innerHTML = `<i class="ph-fill ph-map-pin"></i> <span>${labelText}</span>`;
+                    div.addEventListener('click', () => {
+                        const destId = item.id || item.subdistrict_id || item.city_id;
+                        if (idInput) idInput.value = destId;
+                        if (nameInput) nameInput.value = labelText;
+                        if (inputSearch) inputSearch.value = labelText;
+                        dropdown.style.display = 'none';
+                        showToast(`Dipilih: ${labelText}. Klik "Simpan Asal Pengiriman" untuk menerapkan.`, 'info');
+                    });
+                    dropdown.appendChild(div);
+                });
+            } catch (err) {
+                if (dropdown) dropdown.innerHTML = '<div class="origin-dropdown-empty">Gagal memuat destinasi.</div>';
+            }
+        }
+
+        if (inputSearch) {
+            inputSearch.addEventListener('input', (e) => {
+                clearTimeout(debounceTimer);
+                const val = e.target.value.trim();
+                if (val.length < 2) {
+                    if (dropdown) dropdown.style.display = 'none';
+                    return;
+                }
+                debounceTimer = setTimeout(() => {
+                    performOriginSearch(val);
+                }, 350);
+            });
+
+            inputSearch.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    performOriginSearch(inputSearch.value.trim());
+                }
+            });
+        }
+
+        if (btnSearch) {
+            btnSearch.addEventListener('click', () => {
+                if (inputSearch) performOriginSearch(inputSearch.value.trim());
+            });
+        }
+
+        // Tutup dropdown jika klik di luar
+        document.addEventListener('click', (e) => {
+            if (dropdown && !dropdown.contains(e.target) && e.target !== inputSearch && e.target !== btnSearch) {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        // Reset ke Default Surabaya
+        if (btnReset) {
+            btnReset.addEventListener('click', async () => {
+                if (idInput) idInput.value = '254';
+                if (nameInput) nameInput.value = 'Surabaya (Default)';
+                if (inputSearch) inputSearch.value = '';
+                if (activeDisplay) activeDisplay.textContent = 'Surabaya (Default)';
+
+                if (window.currentUserId) {
+                    try {
+                        await fetch('/api/shipping/origin', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                userId: window.currentUserId,
+                                originId: 254,
+                                originName: 'Surabaya (Default)'
+                            })
+                        });
+                    } catch (e) {}
+                }
+                showToast('Asal pengiriman dikembalikan ke default (Surabaya)', 'success');
+            });
+        }
+
+        // Simpan Asal Pengiriman
+        if (btnSave) {
+            btnSave.addEventListener('click', async () => {
+                const originId = idInput?.value || 254;
+                const originName = nameInput?.value || 'Surabaya (Default)';
+
+                const origText = btnSave.innerHTML;
+                btnSave.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Menyimpan...';
+                btnSave.disabled = true;
+
+                try {
+                    if (!window.currentUserId) {
+                        const { data: { session } } = await window.supabaseClient.auth.getSession();
+                        if (session?.user?.id) window.currentUserId = session.user.id;
+                    }
+
+                    if (!window.currentUserId) throw new Error("Silakan login terlebih dahulu.");
+
+                    const res = await fetch('/api/shipping/origin', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            userId: window.currentUserId,
+                            originId: Number(originId),
+                            originName: originName
+                        })
+                    });
+
+                    const json = await res.json();
+                    if (!json.success) throw new Error(json.message || "Gagal menyimpan");
+
+                    if (activeDisplay) activeDisplay.textContent = originName;
+                    localStorage.setItem('user_shipping_origin_id', originId);
+                    localStorage.setItem('user_shipping_origin_name', originName);
+
+                    showToast(`Asal pengiriman berhasil disimpan! AI akan menghitung ongkir dari ${originName}.`, 'success');
+                } catch (err) {
+                    showToast('Gagal menyimpan: ' + err.message, 'error');
+                }
+
+                btnSave.innerHTML = origText;
+                btnSave.disabled = false;
+            });
+        }
+    }
+
+    initOriginSettings();
 
 
     // =============================================
@@ -1354,9 +1527,37 @@ document.addEventListener('DOMContentLoaded', async () => {
                         combined = combined.split('===CONFIG===\n')[0].trim();
                     }
                     if (knowledge.store_rules) {
-                        combined += (combined ? '\n\n' : '') + knowledge.store_rules;
+                        // Bersihkan tag teknis ASAL_PENGIRIMAN dari textarea prompt jika ada
+                        const cleanRules = knowledge.store_rules.replace(/===ASAL_PENGIRIMAN===[\s\S]*?===END_ASAL_PENGIRIMAN===\n?/g, '').trim();
+                        if (cleanRules) combined += (combined ? '\n\n' : '') + cleanRules;
                     }
                     systemPromptInput.value = combined;
+                }
+
+                // Load Asal Pengiriman Toko
+                try {
+                    let savedOriginId = 254;
+                    let savedOriginName = 'Surabaya (Default)';
+                    const res = await fetch(`/api/shipping/origin/${user_id}`);
+                    const origJson = await res.json();
+                    if (origJson?.success && origJson.data?.originName) {
+                        savedOriginId = origJson.data.originId;
+                        savedOriginName = origJson.data.originName;
+                    } else if (knowledge.store_rules) {
+                        const matchId = knowledge.store_rules.match(/ORIGIN_ID:\s*(\d+)/i);
+                        const matchName = knowledge.store_rules.match(/ORIGIN_NAME:\s*([^\n\r]+)/i);
+                        if (matchId) savedOriginId = Number(matchId[1]);
+                        if (matchName) savedOriginName = matchName[1].trim();
+                    }
+
+                    const disp = document.getElementById('activeOriginNameDisplay');
+                    if (disp) disp.textContent = savedOriginName;
+                    const idEl = document.getElementById('selectedOriginId');
+                    if (idEl) idEl.value = savedOriginId;
+                    const nameEl = document.getElementById('selectedOriginName');
+                    if (nameEl) nameEl.value = savedOriginName;
+                } catch (origErr) {
+                    console.warn('Gagal memuat asal pengiriman:', origErr);
                 }
                 if (knowledge.blocked_numbers) {
                     blockedNumbers = knowledge.blocked_numbers.split(/[\n,]+/).map(n => n.trim()).filter(Boolean);
