@@ -903,6 +903,32 @@ async function startWhatsAppBot(userId, onStatus) {
                 console.log(`✅ Balas sapaan otomatis ke ${customerName}`);
                 return;
             }
+
+            // 1B. Intercept pertanyaan asal pengiriman / lokasi toko (0ms latency, anti-salah)
+            const isOriginInquiry = /(?:pengiriman|kirim|dikirim|asal|paket(?:nya)?)\s+(?:dari|dr)\s*mana/i.test(lowerText)
+                || /(?:dari|dr)\s*mana\s*(?:kak|min|gan)?\s*(?:pengiriman|kirim|dikirim)/i.test(lowerText)
+                || /(?:lokasi|alamat|posisi|tempat)\s*(?:toko|lapak|gudang|pengiriman)/i.test(lowerText)
+                || /(?:toko|lapak|gudang)\s*(?:di|ada di)\s*mana/i.test(lowerText)
+                || /dari\s*(?:kota|daerah|wilayah)\s*mana/i.test(lowerText)
+                || /(?:dikirim|kirim)\s+(?:dari|lewat)\s+kota\s+mana/i.test(lowerText);
+
+            if (isOriginInquiry) {
+                const originKota = userStoreOriginName || 'Surabaya';
+                let originReply = '';
+                if (custSession?.pendingOrder) {
+                    originReply = `Pengiriman pesanan kami langsung dari *${originKota}* ya kak 😊\n\nUntuk pesanan kakak yang tadi, mau dikirim pakai kurir *JNE REG* atau *J&T EXPRESS* kak? 🙏`;
+                } else {
+                    originReply = `Pengiriman toko kami langsung dari *${originKota}* ya kak 😊\nAda produk yang ingin kakak tanyakan atau pesan?`;
+                }
+                await sock.sendMessage(senderJid, { text: originReply });
+                addToMemory(userId, customerPhone, 'ai', originReply);
+                supabase.from('chats').insert([{
+                    user_id: userId, customer_phone: customerPhone, customer_name: customerName,
+                    message: originReply, sender: 'ai', status: 'sent'
+                }]).then();
+                console.log(`✅ Balas pertanyaan asal pengiriman toko ke ${customerName}: ${originKota}`);
+                return;
+            }
             
             // 2. Ekstrak intent dan lokasi menggunakan Gemini (AI Intent Analyzer)
             const intentData = await extractIntentWithGemini(textMessage, history);
@@ -1170,28 +1196,54 @@ async function startWhatsAppBot(userId, onStatus) {
             } else if (intent === 'CANCEL') {
                 aiReply = "Baik kak, pesanannya sudah kami batalkan ya. Jika ada yang ingin ditanyakan lagi, jangan ragu untuk menghubungi kami kembali! 🙏";
                 console.log(`✅ Batal dari ${customerName}`);
-            } else if (intent === 'CHECK_SHIPPING') {
-                let queryLokasi = cleanAndValidateLocation(intentData.location);
+            } else if (intent === 'ASK_ORIGIN') {
+                const originKota = userStoreOriginName || 'Surabaya';
+                console.log(`📍 Pengguna bertanya asal pengiriman. Menjawab lokasi toko: ${originKota}`);
 
-                // 1. Coba ambil dari Quoted Message jika pelanggan mengutip pesan bot sebelumnya (misal info ongkir lama)
-                const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-                const quotedText = quotedMsg?.conversation || quotedMsg?.extendedTextMessage?.text || quotedMsg?.imageMessage?.caption || "";
-                if (!queryLokasi && quotedText) {
-                    const quotedLocMatch = quotedText.match(/Ongkir ke \*?([^\*\(\n\r]+?)(?:\s*\(|\*|\n|$)/i);
-                    if (quotedLocMatch) {
-                        const cand = cleanAndValidateLocation(quotedLocMatch[1]);
-                        if (cand) {
-                            queryLokasi = cand;
-                            console.log(`📍 Lokasi diambil dari quoted message: "${queryLokasi}"`);
+                // Cek apakah ada pendingOrder aktif dari percakapan sebelumnya
+                if (custSession?.pendingOrder) {
+                    aiReply = `Pengiriman pesanan kami langsung dari *${originKota}* ya kak 😊\n\nUntuk pesanan kakak yang tadi, mau dikirim pakai kurir *JNE REG* atau *J&T EXPRESS* kak? 🙏`;
+                } else {
+                    aiReply = `Pengiriman toko kami langsung dari *${originKota}* ya kak 😊\nAda produk yang ingin kakak tanyakan atau pesan?`;
+                }
+            } else if (intent === 'CHECK_SHIPPING') {
+                // Pengaman ganda: jika pesan sebenarnya menanyakan asal pengiriman / lokasi toko
+                const isOriginMsg = /(?:pengiriman|kirim|dikirim|asal|paket(?:nya)?)\s+(?:dari|dr)\s*mana/i.test(textMessage)
+                    || /(?:dari|dr)\s*mana\s*(?:kak|min|gan)?\s*(?:pengiriman|kirim|dikirim)/i.test(textMessage)
+                    || /(?:lokasi|alamat|posisi|tempat)\s*(?:toko|lapak|gudang|pengiriman)/i.test(textMessage)
+                    || /(?:toko|lapak|gudang)\s*(?:di|ada di)\s*mana/i.test(textMessage)
+                    || /dari\s*(?:kota|daerah|wilayah)\s*mana/i.test(textMessage);
+
+                if (isOriginMsg) {
+                    const originKota = userStoreOriginName || 'Surabaya';
+                    if (custSession?.pendingOrder) {
+                        aiReply = `Pengiriman pesanan kami langsung dari *${originKota}* ya kak 😊\n\nUntuk pesanan kakak yang tadi, mau dikirim pakai kurir *JNE REG* atau *J&T EXPRESS* kak? 🙏`;
+                    } else {
+                        aiReply = `Pengiriman toko kami langsung dari *${originKota}* ya kak 😊\nAda produk yang ingin kakak tanyakan atau pesan?`;
+                    }
+                } else {
+                    let queryLokasi = cleanAndValidateLocation(intentData.location);
+
+                    // 1. Coba ambil dari Quoted Message jika pelanggan mengutip pesan bot sebelumnya (misal info ongkir lama)
+                    const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+                    const quotedText = quotedMsg?.conversation || quotedMsg?.extendedTextMessage?.text || quotedMsg?.imageMessage?.caption || "";
+                    if (!queryLokasi && quotedText) {
+                        const quotedLocMatch = quotedText.match(/Ongkir ke \*?([^\*\(\n\r]+?)(?:\s*\(|\*|\n|$)/i);
+                        if (quotedLocMatch) {
+                            const cand = cleanAndValidateLocation(quotedLocMatch[1]);
+                            if (cand) {
+                                queryLokasi = cand;
+                                console.log(`📍 Lokasi diambil dari quoted message: "${queryLokasi}"`);
+                            }
                         }
                     }
-                }
 
-                // 2. Coba dari session lastDestination jika ada
-                if (!queryLokasi && custSession?.lastDestination) {
-                    queryLokasi = custSession.lastDestination.destLabel || custSession.lastDestination.query;
-                    console.log(`📍 Lokasi diambil dari session lastDestination: "${queryLokasi}"`);
-                }
+                    // 2. Hanya gunakan lastDestination jika pesan benar-benar menanyakan ongkir lanjutan (misal: "kalau 2 kg berapa?", "perkilo berapa?")
+                    const isFollowUpShippingQuery = /(?:ongkir|ongkos|tarif|biaya|per[\s\-]?kilo|per[\s\-]?kg|\bkg\b|\bkilo\b)/i.test(textMessage);
+                    if (!queryLokasi && custSession?.lastDestination && isFollowUpShippingQuery) {
+                        queryLokasi = custSession.lastDestination.destLabel || custSession.lastDestination.query;
+                        console.log(`📍 Lokasi diambil dari session lastDestination: "${queryLokasi}"`);
+                    }
 
                 // 3. Coba dari riwayat chat
                 if (!queryLokasi && history && history.length > 0) {
@@ -1362,6 +1414,7 @@ async function startWhatsAppBot(userId, onStatus) {
                 } else {
                     aiReply = "Mau cek ongkir ke mana kak? Sebutkan nama kota atau kecamatan tujuannya ya 😊";
                 }
+            }
             } else {
                 // intent === 'GENERAL'
                 let autoShippingInfo = "";

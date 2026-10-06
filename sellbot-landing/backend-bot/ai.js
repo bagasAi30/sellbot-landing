@@ -83,6 +83,7 @@ ${productCatalog}
 - JANGAN MENGULANGI rincian estimasi harga/ongkir/produk yang sudah dijelaskan di chat sebelumnya. Cukup konfirmasi singkat.
 - Jika ada [KONTEKS SISTEM] dalam pesan user → ikuti instruksi tersebut dengan ketat
 - Jika pelanggan hanya mengkonfirmasi (misal: "samakan saja", "iya kak", "oke"), balas dengan SANGAT SINGKAT (1 kalimat), jangan kirim rincian harga lagi.
+- Jika pelanggan bertanya asal pengiriman atau lokasi toko (misal: "pengiriman dari mana kak", "dikirim dari mana", "lokasi toko di mana", "dari mana pengirimannya"): JAWAB LANGSUNG nama kota asal toko (lihat info di === ASAL PENGIRIMAN TOKO ===). DILARANG MENGULANG format invoice atau rincian total pesanan! Cukup sebutkan kota asal pengiriman secara ramah dan singkat.
 
 === ATURAN COD / BAYAR DI TEMPAT (SANGAT PENTING) ===
 - JANGAN PERNAH menawarkan, menyebutkan, atau membahas COD / metode pembayaran / biaya layanan JIKA PELANGGAN TIDAK BERTANYA secara spesifik tentang pembayaran atau COD.
@@ -428,7 +429,18 @@ function extractIntentRuleBased(userMessage, history = []) {
         return { intent: "ASK_COD", location: null };
     }
 
-    // 4. Cek intent CHECK_SHIPPING
+    // 4. Cek intent ASK_ORIGIN (Tanya Asal Pengiriman / Lokasi Toko)
+    const isOriginQuery = /(?:pengiriman|kirim|dikirim|asal|paket(?:nya)?)\s+(?:dari|dr)\s*mana/i.test(lower)
+        || /(?:dari|dr)\s*mana\s*(?:kak|min|gan)?\s*(?:pengiriman|kirim|dikirim)/i.test(lower)
+        || /(?:lokasi|alamat|posisi|tempat)\s*(?:toko|lapak|gudang|pengiriman)/i.test(lower)
+        || /(?:toko|lapak|gudang)\s*(?:di|ada di)\s*mana/i.test(lower)
+        || /dari\s*(?:kota|daerah|wilayah)\s*mana/i.test(lower)
+        || /(?:dikirim|kirim)\s+(?:dari|lewat)\s+kota\s+mana/i.test(lower);
+    if (isOriginQuery) {
+        return { intent: "ASK_ORIGIN", location: null };
+    }
+
+    // 5. Cek intent CHECK_SHIPPING
     const isShippingQuery = /(?:ongkir|ongkos\s*kirim|tarif|biaya\s*(?:ongkir|kirim)|kirim\s+ke|ongkos\s+ke|per[\s\-]?kilo|per[\s\-]?kg)/i.test(lower);
     if (isShippingQuery) {
         let loc = null;
@@ -478,11 +490,12 @@ Pesan Terbaru Pengguna:
 "${userMessage}"
 
 PILIHAN INTENT:
-1. "CHECK_SHIPPING": Jika pengguna MINTA CEK ONGKIR, BERTANYA ONGKIR, BERTANYA ONGKIR PER KILO ("perkilo", "per kg"), atau MEMBERIKAN ALAMAT/KOTA/KECAMATAN setelah ditanya ongkir/alamat.
-2. "ASK_COD": Jika pengguna bertanya apakah bisa COD, bayar di tempat, atau sistem pembayarannya bagaimana.
-3. "CANCEL": Jika pengguna membatalkan pesanan (contoh: "batal", "cancel", "nggak jadi").
-4. "SELECT_COURIER": Jika pengguna memilih kurir (contoh: "JNE", "J&T") baik sendiri maupun bersamaan dengan nama/alamat penerima.
-5. "GENERAL": Selain dari yang di atas (contoh: ngobrol biasa, tanya produk, minta foto/gambar produk, pesan barang HANYA menyebutkan nama produk tanpa alamat pengiriman).
+1. "ASK_ORIGIN": Jika pengguna bertanya ASAL pengiriman atau lokasi toko/gudang (contoh: "pengiriman dari mana", "dikirim dari mana kak", "lokasi toko di mana", "dari mana pengirimannya"). PENTING: Ini BUKAN CHECK_SHIPPING!
+2. "CHECK_SHIPPING": Jika pengguna MINTA CEK ONGKIR KE TUJUAN, BERTANYA TARIF ONGKIR, BERTANYA ONGKIR PER KILO ("perkilo", "per kg"), atau MEMBERIKAN ALAMAT/KOTA/KECAMATAN TUJUAN PENERIMA.
+3. "ASK_COD": Jika pengguna bertanya apakah bisa COD, bayar di tempat, atau sistem pembayarannya bagaimana.
+4. "CANCEL": Jika pengguna membatalkan pesanan (contoh: "batal", "cancel", "nggak jadi").
+5. "SELECT_COURIER": Jika pengguna memilih kurir (contoh: "JNE", "J&T") baik sendiri maupun bersamaan dengan nama/alamat penerima.
+6. "GENERAL": Selain dari yang di atas (contoh: ngobrol biasa, tanya produk, minta foto/gambar produk, pesan barang HANYA menyebutkan nama produk tanpa alamat pengiriman).
 
 PENTING UNTUK LOKASI:
 Kamu WAJIB mengekstrak nama lokasi (kota/kecamatan) dari pesan pengguna jika dia menyebutkan alamat/tujuan pengiriman, untuk INTENT APA PUN (termasuk SELECT_COURIER, CHECK_SHIPPING, maupun GENERAL).
