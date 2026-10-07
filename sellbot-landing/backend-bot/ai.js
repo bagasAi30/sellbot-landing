@@ -36,8 +36,13 @@ function getProductWeight(p, fallbackWeight = 250) {
 async function generateAIResponse(userMessage, storeRules = "", products = [], history = [], shippingInfo = "") {
     try {
         // 1. Format katalog produk
-        const productCatalog = products && products.length > 0
-            ? products.map(p => {
+        const validProducts = Array.isArray(products) ? products : [];
+        const hasValidProducts = validProducts.length > 0;
+        const validProductNames = validProducts.map(p => getProductFullName(p).toLowerCase().trim()).filter(Boolean);
+
+        let productCatalog = "";
+        if (hasValidProducts) {
+            productCatalog = validProducts.map(p => {
                 const nama = getProductFullName(p);
                 const harga = Number(p.price || 0).toLocaleString('id-ID');
                 const stok = p.stock ?? 'Tersedia';
@@ -46,35 +51,78 @@ async function generateAIResponse(userMessage, storeRules = "", products = [], h
                 const desc = p.description ? ` | ${p.description}` : '';
                 const hasPhoto = p.image_url ? ' | Foto: Tersedia' : ' | Foto: Tidak ada';
                 return `- *${nama}*: Rp ${harga} | Stok: ${stok}${berat}${varian}${desc}${hasPhoto}`;
-            }).join('\n')
-            : "Katalog produk belum diatur oleh admin toko.";
+            }).join('\n');
+        } else {
+            productCatalog = "KATALOG PRODUK FISIK KOSONG (Semua produk fisik telah dihapus oleh admin toko). Toko tidak menjual barang fisik!";
+        }
 
-        // 2. Format riwayat chat
+        // 2. Format riwayat chat (Sanitasi agar balasan lama yang memuat produk terhapus TIDAK meracuni AI)
         const formattedHistory = history
             .filter(item => item.message && item.message.trim())
+            .filter(item => {
+                // Jika produk fisik sudah dihapus semua:
+                // Jangan sertakan pesan asisten terdahulu yang memuat daftar produk lama (kripik, madu, tumbler, celana, dsb)
+                if (!hasValidProducts && item.sender !== 'customer') {
+                    const msgLow = item.message.toLowerCase();
+                    if (
+                        msgLow.includes('berikut daftarnya') ||
+                        msgLow.includes('camilan') ||
+                        msgLow.includes('kripik') ||
+                        msgLow.includes('madu') ||
+                        msgLow.includes('tumbler') ||
+                        msgLow.includes('celana') ||
+                        msgLow.includes('kaos') ||
+                        msgLow.includes('hoodie') ||
+                        msgLow.includes('kopi robusta') ||
+                        (msgLow.includes('1.') && msgLow.includes('rp'))
+                    ) {
+                        return false; // Hapus pesan lama ini dari konteks AI
+                    }
+                }
+                // Jika ada produk aktif, tapi pesan asisten menyebut produk yang sudah tidak ada di katalog:
+                if (hasValidProducts && item.sender !== 'customer') {
+                    const msgLow = item.message.toLowerCase();
+                    if (msgLow.includes('berikut daftarnya') && !validProductNames.some(name => msgLow.includes(name))) {
+                        return false;
+                    }
+                }
+                return true;
+            })
             .map(item => ({
                 role: item.sender === 'customer' ? 'user' : 'assistant',
                 content: item.message
             }));
 
         // 3. System Prompt
-        const hasCustomPersona = storeRules && storeRules.includes('=== PERSONA AI');
-        const systemPrompt = `${hasCustomPersona ? storeRules + '\n\n' : ''}Kamu adalah CS (Customer Service) WhatsApp dari sebuah toko online. Tugasmu membantu pelanggan dengan ramah, natural, dan efisien menggunakan bahasa Indonesia kasual.
+        const hasCustomPersona = storeRules && (storeRules.includes('=== PERSONA AI') || storeRules.includes('PERSONA'));
+        let roleAndProductHeader = "";
+        
+        if (hasCustomPersona) {
+            roleAndProductHeader = `${storeRules}
 
-${!hasCustomPersona ? `=== ATURAN TOKO ===\n${storeRules || "Layani pelanggan dengan ramah dan profesional."}` : ''}
+=== STATUS KATALOG PRODUK ===
+${productCatalog}
+
+=== ATURAN MUTLAK KETERSEDIAAN PRODUK (ANTI-HALLUCINATION / DELETED PRODUCTS) ===
+1. SUMBER KEBENARAN PRODUK HANYA PERSONA AI DAN KATALOG PRODUK DI ATAS!
+2. DILARANG KERAS MENGUTIP, MENYEBUTKAN, ATAU MENAWARKAN PRODUK DARI RIWAYAT PERCAKAPAN LAMA (seperti camilan, kripik, madu, tumbler, celana, dll) JIKA TIDAK TERCANTUM PADA PERSONA AI ATAU KATALOG DI ATAS!
+3. Jika katalog produk fisik kosong, maka BISNIS INI HANYA MENJUAL PRODUK/LAYANAN PADA PERSONA AI DI ATAS (contoh: Penjualan & Aktivasi Tools AsistenLapak AI senilai Rp 99.000). Jawab pertanyaan "jual apa" atau penawaran HANYA dengan menjelaskan produk/layanan pada PERSONA AI tersebut!
+4. JANGAN PERNAH mengungkit atau mengulang produk fisik lama yang sudah dihapus dari katalog!`;
+        } else {
+            roleAndProductHeader = `Kamu adalah CS (Customer Service) WhatsApp dari sebuah toko online. Tugasmu membantu pelanggan dengan ramah, natural, dan efisien menggunakan bahasa Indonesia kasual.
+
+=== ATURAN TOKO ===
+${storeRules || "Layani pelanggan dengan ramah dan profesional."}
 
 === KATALOG PRODUK ===
 ${productCatalog}
 
-=== CARA MERESPONS ===
-- Gunakan bahasa Indonesia santai dan hangat (boleh pakai "kak", emoji sesekali)
-- Jawab LANGSUNG dan SPESIFIK sesuai pertanyaan, jangan berputar-putar
-- Maksimal 3-4 kalimat kecuali perlu penjelasan panjang
-- Jika ditanya produk → sebutkan nama, harga, dan stok PERSIS dari katalog di atas
-- Jika ditanya ukuran/varian/warna → jawab HANYA berdasarkan kolom "Varian" di katalog PERSIS. JANGAN menambah, mengurangi, atau mengasumsikan varian yang tidak tercantum. Jika tidak ada data varian → katakan "untuk info varian silakan tanya langsung ke admin ya kak"
-- JANGAN PERNAH mengarang ukuran, warna, atau varian yang tidak ada di katalog
-- JANGAN mengulang sapaan jika sudah menyapa
-- JANGAN mengarang informasi yang tidak ada di katalog atau aturan toko
+=== ATURAN MUTLAK KETERSEDIAAN PRODUK ===
+1. Jawab HANYA berdasarkan KATALOG PRODUK di atas. DILARANG KERAS mengambil produk dari riwayat chat lama jika tidak ada di katalog saat ini.
+2. Jika katalog kosong, jelaskan dengan sopan bahwa katalog produk sedang kosong / diperbarui oleh admin dan belum ada produk yang tersedia saat ini.`;
+        }
+
+        const systemPrompt = `${roleAndProductHeader}
 
 === ATURAN KONTEKS PERCAKAPAN (SANGAT PENTING) ===
 - Selalu baca RIWAYAT PERCAKAPAN sebelum menjawab
@@ -587,8 +635,8 @@ async function extractOrderDetails(userMessage, history = [], storeRules = "", p
         const prompt = `Kamu adalah sistem AI Order Extractor untuk toko online WhatsApp.
 Tugasmu: Mengekstrak data pesanan yang SEDANG aktif dibahas dari percakapan WhatsApp terkini.
 PERATURAN PENTING:
-1. Fokus HANYA pada produk yang SEDANG dibicarakan atau dipesan saat ini di chat terkini (misal: "Paket Umbul-Umbul Promo", "Kripik Singkong Balado", dll).
-2. DILARANG KERAS mengambil nama produk lama (seperti kaos, sepatu, dll) yang pernah ada di riwayat lampau jika percakapan terkini membicarakan produk baru!
+1. Fokus HANYA pada produk yang SEDANG dibicarakan atau dipesan saat ini di chat terkini sesuai katalog atau aturan toko.
+2. DILARANG KERAS mengambil nama produk lama yang pernah ada di riwayat lampau jika produk tersebut sudah tidak ada atau percakapan terkini membicarakan hal lain!
 3. Jika di pesan terakhir AI menyebutkan total harga (contoh: "10 paket Umbul-Umbul = Rp 1.100.000"), maka produk = "Paket Umbul-Umbul Promo", qty = 10, unit = "paket", total_harga_barang = 1100000.
 4. Ekstrak nama penerima, alamat lengkap, dan perbaiki typo nama lokasi (kecamatan/kota tujuan pengiriman, misal: "tambakasari surabaya" -> "Tambaksari, Surabaya").
 5. Deteksi kurir pilihan pelanggan jika disebutkan di pesan (misal: "JNE REG" atau "J&T EXPRESS").

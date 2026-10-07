@@ -96,6 +96,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const user_id = activeUser.id;
         window.currentUserId = user_id;
+        window.currentUserCreatedAt = activeUser.created_at;
 
         // --- Profile Display Logic ---
         const userMeta = activeUser.user_metadata || {};
@@ -344,6 +345,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (!error) {
                     showToast('Produk berhasil dihapus', 'success');
+                    // Reset cache AI di backend agar produk yang dihapus tidak diingat kembali
+                    if (window.currentUserId) {
+                        fetch('/api/chat/clear-cache', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId: window.currentUserId })
+                        }).catch(() => {});
+                    }
                     fetchDashboardData();
                 } else {
                     showToast('Gagal menghapus produk: ' + error.message, 'error');
@@ -518,8 +527,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                         store_rules: existingKb?.store_rules || ''
                     }, { onConflict: 'user_id' });
 
-                if (!error) showToast('System Prompt berhasil disimpan! AI akan otomatis mengikuti instruksi ini.', 'success');
-                else showToast('Gagal menyimpan System Prompt: ' + error.message, 'error');
+                if (!error) {
+                    showToast('System Prompt berhasil disimpan! AI akan otomatis mengikuti instruksi ini.', 'success');
+                    // Reset cache percakapan di server agar sistem prompt baru langsung aktif
+                    if (user_id || window.currentUserId) {
+                        fetch('/api/chat/clear-cache', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId: user_id || window.currentUserId })
+                        }).catch(() => {});
+                    }
+                } else {
+                    showToast('Gagal menyimpan System Prompt: ' + error.message, 'error');
+                }
             } catch (err) {
                 showToast('Terjadi kesalahan: ' + err.message, 'error');
             }
@@ -1162,6 +1182,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 6. CHAT HISTORY DETAIL MODAL
     // =============================================
     window.openChatDetail = async function (phone, name) {
+        window.currentViewingCustomerPhone = phone;
+        window.currentViewingCustomerName = name;
+
         // Remove active class from all items
         document.querySelectorAll('.chat-customer-item').forEach(el => el.classList.remove('active'));
         // Add active class to the selected item if it exists in the list
@@ -1171,6 +1194,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const custTitleEl = document.getElementById('chatViewerTitle');
         const custPhoneEl = document.getElementById('chatViewerPhone');
         const avatarEl = document.getElementById('chatViewerAvatar');
+        const btnDeleteCurrent = document.getElementById('btnDeleteCurrentChat');
         const container = document.getElementById('chatMessagesContainer2');
 
         if (!container) return;
@@ -1180,6 +1204,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (avatarEl) {
             avatarEl.style.display = 'flex';
             avatarEl.innerText = (name || phone || 'CS').substring(0, 2).toUpperCase();
+        }
+        if (btnDeleteCurrent) {
+            btnDeleteCurrent.style.display = 'inline-flex';
         }
 
         container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px; margin: auto;"><i class="ph ph-circle-notch ph-spin" style="font-size: 24px;"></i><br>Memuat percakapan...</div>';
@@ -1310,6 +1337,144 @@ document.addEventListener('DOMContentLoaded', async () => {
             btnChatBackToList.addEventListener('click', () => {
                 const chatLayoutWrapper = document.querySelector('.chat-layout-wrapper');
                 if (chatLayoutWrapper) chatLayoutWrapper.classList.remove('mobile-show-chat');
+            });
+        }
+
+        initChatActions();
+    }
+
+    // Helper untuk reset tampilan chat viewer
+    window.resetChatViewer = function () {
+        window.currentViewingCustomerPhone = null;
+        window.currentViewingCustomerName = null;
+        const custTitleEl = document.getElementById('chatViewerTitle');
+        const custPhoneEl = document.getElementById('chatViewerPhone');
+        const avatarEl = document.getElementById('chatViewerAvatar');
+        const container = document.getElementById('chatMessagesContainer2');
+        const btnDeleteCurrent = document.getElementById('btnDeleteCurrentChat');
+
+        if (custTitleEl) custTitleEl.innerText = 'Pilih pelanggan untuk melihat chat';
+        if (custPhoneEl) custPhoneEl.innerText = '';
+        if (avatarEl) avatarEl.style.display = 'none';
+        if (btnDeleteCurrent) btnDeleteCurrent.style.display = 'none';
+        if (container) {
+            container.innerHTML = `
+                <div class="empty-chat-state" style="text-align: center; margin: auto; color: var(--text-secondary);">
+                    <i class="ph ph-chats" style="font-size: 48px; opacity: 0.2; margin-bottom: 8px; display: block;"></i>
+                    <p>Riwayat chat akan muncul di sini</p>
+                </div>
+            `;
+        }
+    };
+
+    // Inisialisasi tombol hapus riwayat chat pelanggan & reset semua chat
+    function initChatActions() {
+        const btnDeleteCurrentChat = document.getElementById('btnDeleteCurrentChat');
+        if (btnDeleteCurrentChat && !btnDeleteCurrentChat.dataset.initialized) {
+            btnDeleteCurrentChat.dataset.initialized = 'true';
+            btnDeleteCurrentChat.addEventListener('click', async () => {
+                const phone = window.currentViewingCustomerPhone;
+                if (!phone) return;
+
+                if (!confirm(`Hapus riwayat chat pelanggan (${phone})?\n\nKonteks riwayat di database dan memori percakapan bot AI untuk nomor ini akan dihapus bersih.`)) {
+                    return;
+                }
+
+                const origHtml = btnDeleteCurrentChat.innerHTML;
+                btnDeleteCurrentChat.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Menghapus...';
+                btnDeleteCurrentChat.disabled = true;
+
+                try {
+                    const resp = await fetch('/api/chat/clear', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            userId: window.currentUserId,
+                            customerPhone: phone
+                        })
+                    });
+
+                    if (!resp.ok) {
+                        await window.supabaseClient
+                            .from('chats')
+                            .delete()
+                            .eq('user_id', window.currentUserId)
+                            .eq('customer_phone', phone);
+                    }
+
+                    showToast(`Riwayat chat ${phone} berhasil dihapus & memori AI direset!`, 'success');
+                    window.resetChatViewer();
+                    await loadChatHistoryCustomers();
+                } catch (err) {
+                    console.error('Error clearing chat:', err);
+                    try {
+                        await window.supabaseClient
+                            .from('chats')
+                            .delete()
+                            .eq('user_id', window.currentUserId)
+                            .eq('customer_phone', phone);
+                        showToast(`Riwayat chat ${phone} berhasil dihapus dari database!`, 'success');
+                        window.resetChatViewer();
+                        await loadChatHistoryCustomers();
+                    } catch (supaErr) {
+                        showToast('Gagal menghapus riwayat chat: ' + err.message, 'error');
+                    }
+                } finally {
+                    btnDeleteCurrentChat.innerHTML = origHtml;
+                    btnDeleteCurrentChat.disabled = false;
+                }
+            });
+        }
+
+        const btnResetAllChats = document.getElementById('btnResetAllChats');
+        if (btnResetAllChats && !btnResetAllChats.dataset.initialized) {
+            btnResetAllChats.dataset.initialized = 'true';
+            btnResetAllChats.addEventListener('click', async () => {
+                if (!confirm('Peringatan: Hapus SEMUA riwayat chat pelanggan dan reset seluruh ingatan AI?\n\nTindakan ini akan mengosongkan seluruh log pesan dan riwayat AI.')) {
+                    return;
+                }
+
+                const origHtml = btnResetAllChats.innerHTML;
+                btnResetAllChats.innerHTML = '<i class="ph ph-spinner ph-spin"></i>';
+                btnResetAllChats.disabled = true;
+
+                try {
+                    const resp = await fetch('/api/chat/clear', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            userId: window.currentUserId,
+                            clearAll: true
+                        })
+                    });
+
+                    if (!resp.ok) {
+                        await window.supabaseClient
+                            .from('chats')
+                            .delete()
+                            .eq('user_id', window.currentUserId);
+                    }
+
+                    showToast('Semua riwayat chat berhasil dibersihkan & ingatan bot direset!', 'success');
+                    window.resetChatViewer();
+                    await loadChatHistoryCustomers();
+                } catch (err) {
+                    console.error('Error resetting all chats:', err);
+                    try {
+                        await window.supabaseClient
+                            .from('chats')
+                            .delete()
+                            .eq('user_id', window.currentUserId);
+                        showToast('Semua riwayat chat di database berhasil dihapus!', 'success');
+                        window.resetChatViewer();
+                        await loadChatHistoryCustomers();
+                    } catch (supaErr) {
+                        showToast('Gagal mereset chat: ' + err.message, 'error');
+                    }
+                } finally {
+                    btnResetAllChats.innerHTML = origHtml;
+                    btnResetAllChats.disabled = false;
+                }
             });
         }
     }
@@ -1631,10 +1796,54 @@ document.addEventListener('DOMContentLoaded', async () => {
             const remainingCredits = Math.max(0, totalQuota - usedCredits);
             const percentLeft = Math.min(100, Math.max(0, Math.round((remainingCredits / totalQuota) * 100)));
 
+            // Kalkulasi masa aktif trial 1 hari (24 jam)
+            const createdAtStr = window.currentUserCreatedAt;
+            const regTime = createdAtStr ? new Date(createdAtStr).getTime() : Date.now();
+            const now = Date.now();
+            const elapsedMs = now - regTime;
+            const trialDurationMs = 24 * 60 * 60 * 1000; // 24 jam
+            const isTimeExpired = (planLower === 'trial') && (elapsedMs >= trialDurationMs);
+            const isQuotaExpired = remainingCredits <= 0;
+            const isTrialExpired = (planLower === 'trial') && (isTimeExpired || isQuotaExpired);
+
+            const msLeft = Math.max(0, trialDurationMs - elapsedMs);
+            const hoursLeft = Math.floor(msLeft / (1000 * 60 * 60));
+            const minsLeft = Math.floor((msLeft % (1000 * 60 * 60)) / (1000 * 60));
+
+            // Jika masa trial telah berakhir atau kuota trial habis
+            if (isTrialExpired) {
+                const btnRunBot = document.getElementById('btnRunBot');
+                const toggleBotActive = document.getElementById('toggleBotActive');
+                if (btnRunBot) {
+                    btnRunBot.disabled = true;
+                    btnRunBot.classList.add('disabled');
+                    btnRunBot.style.opacity = '0.5';
+                    btnRunBot.style.cursor = 'not-allowed';
+                    btnRunBot.title = 'Masa trial telah berakhir. Silakan pilih paket langganan.';
+                }
+                if (toggleBotActive) {
+                    toggleBotActive.checked = false;
+                    toggleBotActive.disabled = true;
+                }
+
+                // Tampilkan popup Trial Expired jika belum di-dismiss pada sesi ini
+                if (typeof openModal === 'function' && !sessionStorage.getItem('trialExpiredModalDismissed')) {
+                    const descEl = document.querySelector('#trialExpiredModal p');
+                    if (descEl) {
+                        if (isTimeExpired) {
+                            descEl.innerHTML = `Batas masa uji coba gratis <strong>1 hari (24 jam)</strong> Anda telah selesai.<br>Silakan pilih paket langganan untuk terus menikmati auto-reply AI toko Anda 24/7.`;
+                        } else {
+                            descEl.innerHTML = `Batas kuota <strong>100 kredit chat WhatsApp</strong> trial Anda telah habis terpakai.<br>Silakan pilih paket langganan untuk terus menikmati auto-reply AI toko Anda 24/7.`;
+                        }
+                    }
+                    setTimeout(() => openModal('trialExpiredModal'), 600);
+                }
+            }
+
             let progressColor = 'linear-gradient(90deg, #6366F1, #10B981)';
             let badgeBg = '#D1FAE5';
             let badgeColor = '#059669';
-            if (percentLeft < 20) {
+            if (isTrialExpired || percentLeft < 20) {
                 progressColor = 'linear-gradient(90deg, #EF4444, #F87171)';
                 badgeBg = '#FEE2E2';
                 badgeColor = '#DC2626';
@@ -1651,14 +1860,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             const statProgressBar = document.getElementById('statCreditProgressBar');
 
             if (statRemaining) statRemaining.innerText = remainingCredits.toLocaleString('id-ID');
-            if (statPlanName) statPlanName.innerText = userPlan;
+            if (statPlanName) {
+                if (isTrialExpired) {
+                    statPlanName.innerHTML = `<span style="color:#EF4444; font-weight:700;">Trial Berakhir</span>`;
+                } else if (planLower === 'trial') {
+                    statPlanName.innerHTML = `Trial (${hoursLeft}j ${minsLeft}m)`;
+                } else {
+                    statPlanName.innerText = userPlan;
+                }
+            }
             if (statPercentBadge) {
-                statPercentBadge.innerText = `${percentLeft}%`;
+                statPercentBadge.innerText = isTrialExpired ? '0% (Habis)' : `${percentLeft}%`;
                 statPercentBadge.style.color = badgeColor;
                 statPercentBadge.style.background = badgeBg;
             }
             if (statProgressBar) {
-                statProgressBar.style.width = `${percentLeft}%`;
+                statProgressBar.style.width = isTrialExpired ? '0%' : `${percentLeft}%`;
                 statProgressBar.style.background = progressColor;
             }
 
@@ -1675,18 +1892,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (billingUsed) billingUsed.innerText = usedCredits.toLocaleString('id-ID');
             if (billingTotalInfo) billingTotalInfo.innerText = `dari kuota ${totalQuota.toLocaleString('id-ID')} kredit`;
             if (billingPercentLabel) {
-                billingPercentLabel.innerText = `${percentLeft}% Tersisa (${remainingCredits.toLocaleString('id-ID')} Kredit)`;
+                if (isTrialExpired) {
+                    billingPercentLabel.innerText = isTimeExpired ? 'Masa Trial 1 Hari Berakhir' : 'Kuota Trial 100 Kredit Habis';
+                } else {
+                    billingPercentLabel.innerText = `${percentLeft}% Tersisa (${remainingCredits.toLocaleString('id-ID')} Kredit)`;
+                }
                 billingPercentLabel.style.color = badgeColor;
             }
             if (billingProgressBar) {
-                billingProgressBar.style.width = `${percentLeft}%`;
+                billingProgressBar.style.width = isTrialExpired ? '0%' : `${percentLeft}%`;
                 billingProgressBar.style.background = progressColor;
             }
             if (billingPlanBadge) {
-                billingPlanBadge.innerHTML = `<i class="ph-fill ph-sparkle"></i> Paket ${userPlan}`;
+                if (isTrialExpired) {
+                    billingPlanBadge.innerHTML = `<i class="ph-fill ph-x-circle" style="color:#EF4444;"></i> Paket Trial (Berakhir)`;
+                } else if (planLower === 'trial') {
+                    billingPlanBadge.innerHTML = `<i class="ph-fill ph-sparkle"></i> Paket Trial (${hoursLeft}j ${minsLeft}m)`;
+                } else {
+                    billingPlanBadge.innerHTML = `<i class="ph-fill ph-sparkle"></i> Paket ${userPlan}`;
+                }
             }
             if (currentPlanBadge) {
-                currentPlanBadge.innerHTML = `<i class="ph-fill ph-check-circle"></i> Current Plan: ${userPlan}`;
+                if (isTrialExpired) {
+                    currentPlanBadge.innerHTML = `<i class="ph-fill ph-x-circle" style="color:#EF4444;"></i> Current Plan: <span style="color:#EF4444; font-weight:700;">Trial Berakhir</span>`;
+                } else if (planLower === 'trial') {
+                    currentPlanBadge.innerHTML = `<i class="ph-fill ph-check-circle"></i> Current Plan: Trial (${hoursLeft}j ${minsLeft}m • 100 Kredit)`;
+                } else {
+                    currentPlanBadge.innerHTML = `<i class="ph-fill ph-check-circle"></i> Current Plan: ${userPlan}`;
+                }
             }
 
             // 3. Update status tombol paket billing
@@ -1789,6 +2022,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     function updateBotUI(data) {
         if (!data) return;
 
+        if (data.isTrialExpired || data.status === 'EXPIRED') {
+            setBadge('disconnected', 'Trial Berakhir');
+            const btnRunBot = document.getElementById('btnRunBot');
+            const toggleBotActive = document.getElementById('toggleBotActive');
+            if (btnRunBot) {
+                btnRunBot.disabled = true;
+                btnRunBot.classList.add('disabled');
+                btnRunBot.style.opacity = '0.5';
+                btnRunBot.style.cursor = 'not-allowed';
+            }
+            if (toggleBotActive) {
+                toggleBotActive.checked = false;
+                toggleBotActive.disabled = true;
+            }
+            if (botStatusMsg) {
+                botStatusMsg.innerHTML = `<i class="ph-fill ph-warning-circle" style="color:#EF4444;"></i><span style="color:#EF4444; font-weight:600;">Masa trial 1 hari atau batas kuota 100 kredit Anda telah berakhir. Bot dinonaktifkan otomatis.</span>`;
+            }
+            return;
+        }
+
         if (toggleBotActive) {
             toggleBotActive.checked = data.isBotActive;
         }
@@ -1886,6 +2139,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 } else {
                     showToast(data.error || 'Gagal memulai bot', 'error');
+                    if (data.status === 'EXPIRED' || data.isTrialExpired) {
+                        if (typeof openModal === 'function') openModal('trialExpiredModal');
+                    }
                     if (waQrLoading) waQrLoading.style.display = 'none';
                     if (waDisconnectedState) waDisconnectedState.style.display = 'flex';
                 }
@@ -2072,7 +2328,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await fetch('/api/bot/toggle-active', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ active })
+                    body: JSON.stringify({ active, userId: window.currentUserId })
                 });
                 showToast(active ? 'Auto-reply AI Diaktifkan' : 'Auto-reply AI Dimatikan', 'info');
             } catch (err) {

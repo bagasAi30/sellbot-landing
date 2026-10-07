@@ -254,6 +254,160 @@ function getFromMemory(userId, customerPhone) {
     return inMemoryHistory[key] || [];
 }
 
+// =============================================
+// SISTEM VALIDASI TRIAL 1 HARI & KUOTA BOT (AUTO-STOP)
+// =============================================
+const userAccessCache = new Map();
+
+async function checkUserAccess(userId, forceRefresh = false) {
+    if (!userId) return { isAllowed: false, reason: 'INVALID_USER' };
+
+    const now = Date.now();
+    const cached = userAccessCache.get(userId);
+    if (!forceRefresh && cached && (now - cached.timestamp < 20000)) {
+        return cached.data;
+    }
+
+    try {
+        let createdAt = null;
+        let userPlan = 'Trial';
+
+        // 1. Ambil data registrasi user dari Supabase Auth
+        try {
+            const { data: userData, error: uErr } = await supabase.auth.admin.getUserById(userId);
+            if (!uErr && userData?.user) {
+                createdAt = userData.user.created_at;
+                userPlan = userData.user.user_metadata?.plan || 'Trial';
+            }
+        } catch (err) {
+            console.warn(`[checkUserAccess] Gagal ambil auth user ${userId}:`, err.message);
+        }
+
+        // 2. Cek apakah ada invoice sukses (paket langganan aktif)
+        let hasPaidInvoice = false;
+        try {
+            const { data: invoice } = await supabase
+                .from('invoices')
+                .select('plan_name, credits_added, status')
+                .eq('user_id', userId)
+                .in('status', ['success', 'paid', 'settlement'])
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (invoice && invoice.plan_name) {
+                userPlan = invoice.plan_name;
+                hasPaidInvoice = true;
+            }
+        } catch (invErr) {}
+
+        // 3. Hitung pemakaian kredit AI (jumlah balasan AI dari tabel chats)
+        let usedCredits = 0;
+        try {
+            const { count, error: cErr } = await supabase
+                .from('chats')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', userId)
+                .eq('sender', 'ai');
+            if (!cErr && typeof count === 'number') {
+                usedCredits = count;
+            }
+        } catch (chatErr) {}
+
+        const planLower = (userPlan || 'trial').toLowerCase();
+        let totalQuota = 3000;
+        let isTrial = false;
+
+        if (planLower === 'trial' && !hasPaidInvoice) {
+            isTrial = true;
+            totalQuota = 100;
+        } else if (planLower === 'starter') {
+            totalQuota = 3000;
+        } else if (planLower === 'pro') {
+            totalQuota = 8000;
+        } else if (planLower === 'business') {
+            totalQuota = 20000;
+        } else if (planLower === 'agency') {
+            totalQuota = 50000;
+        }
+
+        const remainingCredits = Math.max(0, totalQuota - usedCredits);
+        let isExpired = false;
+        let expiredReason = null;
+        let trialHoursLeft = 24;
+
+        if (isTrial) {
+            const regTime = createdAt ? new Date(createdAt).getTime() : now;
+            const elapsedMs = now - regTime;
+            const trialDurationMs = 24 * 60 * 60 * 1000; // 24 Jam
+            const msLeft = trialDurationMs - elapsedMs;
+            trialHoursLeft = Math.max(0, Math.round((msLeft / (60 * 60 * 1000)) * 10) / 10);
+
+            if (elapsedMs >= trialDurationMs) {
+                isExpired = true;
+                expiredReason = 'TIME_EXPIRED'; // Masa uji coba 1 hari (24 jam) telah selesai
+            } else if (usedCredits >= totalQuota) {
+                isExpired = true;
+                expiredReason = 'QUOTA_EXHAUSTED'; // Batas 100 kredit trial telah habis
+            }
+        } else {
+            if (usedCredits >= totalQuota) {
+                isExpired = true;
+                expiredReason = 'QUOTA_EXHAUSTED';
+            }
+        }
+
+        const result = {
+            isAllowed: !isExpired,
+            isExpired,
+            expiredReason,
+            plan: userPlan,
+            isTrial,
+            totalQuota,
+            usedCredits,
+            remainingCredits,
+            trialHoursLeft,
+            createdAt
+        };
+
+        userAccessCache.set(userId, { timestamp: now, data: result });
+        return result;
+    } catch (err) {
+        console.error('[checkUserAccess] Error:', err.message);
+        return { isAllowed: true, isExpired: false, plan: 'Trial', remainingCredits: 100 };
+    }
+}
+
+function consumeUserCredit(userId) {
+    if (!userId) return;
+    const entry = userAccessCache.get(userId);
+    if (entry && entry.data) {
+        entry.data.usedCredits = (entry.data.usedCredits || 0) + 1;
+        entry.data.remainingCredits = Math.max(0, entry.data.totalQuota - entry.data.usedCredits);
+        if (entry.data.remainingCredits <= 0) {
+            entry.data.isExpired = true;
+            entry.data.isAllowed = false;
+            entry.data.expiredReason = 'QUOTA_EXHAUSTED';
+        }
+    }
+}
+
+/**
+ * Mengirim pesan dengan simulasi "sedang mengetik" (human-like typing indicator)
+ * Sangat penting untuk keamanan akun saat menerima traffic Meta Ads (anti-ban / anti-spam).
+ */
+async function sendReplyWithTyping(sock, senderJid, messagePayload, customDelayMs = null) {
+    if (!sock || !senderJid) return;
+    try {
+        await sock.sendPresenceUpdate('composing', senderJid);
+        const textLen = (messagePayload.text || messagePayload.caption || '').length;
+        const delay = customDelayMs ?? Math.min(2500, Math.max(1200, Math.round(textLen * 18)));
+        await new Promise(r => setTimeout(r, delay));
+        await sock.sendPresenceUpdate('paused', senderJid);
+    } catch (e) {}
+    return await sock.sendMessage(senderJid, messagePayload);
+}
+
 /**
  * Mendapatkan atau menginisialisasi sesi per-pelanggan terisolasi
  */
@@ -468,6 +622,16 @@ async function getBaileysVersion() {
  * Fungsi utama untuk menjalankan Bot WA untuk user tertentu
  */
 async function startWhatsAppBot(userId, onStatus) {
+    // 0. Validasi status masa trial / kuota sebelum mengizinkan koneksi WhatsApp
+    const access = await checkUserAccess(userId, true);
+    if (!access.isAllowed) {
+        const errorMsg = access.expiredReason === 'TIME_EXPIRED'
+            ? 'Masa uji coba gratis (trial 1 hari / 24 jam) Anda telah berakhir. Silakan pilih paket langganan untuk melanjutkan.'
+            : 'Kuota 100 kredit balasan chat WhatsApp trial Anda telah habis terpakai. Silakan upgrade paket langganan.';
+        console.warn(`⛔ [TRIAL EXPIRED] Tidak dapat menjalankan bot untuk user ${userId}: ${errorMsg}`);
+        throw new Error(errorMsg);
+    }
+
     if (activeSessions[userId] && activeSessions[userId].sock) {
         const isSocketLive = Boolean(activeSessions[userId].sock.ws?.isOpen || activeSessions[userId].sock.ws?.readyState === 1);
         if (isSocketLive && activeSessions[userId].status === 'CONNECTED') {
@@ -688,6 +852,19 @@ async function startWhatsAppBot(userId, onStatus) {
             }
         }
 
+        // [PROTEKSI TRIAL 1 HARI & KUOTA BOT]:
+        const access = await checkUserAccess(userId);
+        if (!access.isAllowed) {
+            console.warn(`⛔ [AUTO-STOP] Bot tidak membalas chat dari ${customerPhone} untuk user ${userId}. Alasan: ${access.expiredReason} (Paket: ${access.plan}, Kuota: ${access.usedCredits}/${access.totalQuota}, Sisa Jam: ${access.trialHoursLeft}j)`);
+            continue; // Hentikan balasan otomatis saat trial atau kuota habis
+        }
+
+        // Cek jika auto-reply sedang dinonaktifkan manual dari dashboard
+        if (activeSessions[userId] && activeSessions[userId].isAutoReplyActive === false) {
+            console.log(`⏸️ [PAUSED] Auto-reply sedang dinonaktifkan oleh pengguna untuk user ${userId}`);
+            continue;
+        }
+
         console.log(`📩 Pesan dari ${customerName} (${customerPhone}): ${textMessage}`);
 
         // Simpan ke in-memory history SEGERA
@@ -808,8 +985,9 @@ async function startWhatsAppBot(userId, onStatus) {
                         aiReply = aiReply.replace(/\[FORWARD_TO_ADMIN\]/gi, '').trim();
                     }
 
-                    // Kirim balasan AI
-                    await sock.sendMessage(senderJid, { text: aiReply });
+                    // Kirim balasan AI dengan jeda mengetik (human typing indicator)
+                    await sendReplyWithTyping(sock, senderJid, { text: aiReply });
+                    consumeUserCredit(userId);
                     console.log(`✅ Balas (Gemini) ke ${customerName}: ${aiReply}`);
                     
                     // Logika forward ke Admin
@@ -853,7 +1031,8 @@ async function startWhatsAppBot(userId, onStatus) {
                 } catch (err) {
                     console.error("Gagal memproses gambar:", err);
                     aiReply = "Terima kasih fotonya ya kak! 🙏 Sedang kami teruskan ke admin kami untuk dicek dan dibantu ya kak. Mohon ditunggu sebentar 😊";
-                    await sock.sendMessage(senderJid, { text: aiReply });
+                    await sendReplyWithTyping(sock, senderJid, { text: aiReply });
+                    consumeUserCredit(userId);
                     return;
                 }
             }
@@ -894,7 +1073,8 @@ async function startWhatsAppBot(userId, onStatus) {
             const isGreeting = /^(halo|hai|hallo|helo|p|ping|pagi|siang|sore|malam|assalamualaikum|assalamu'alaikum)( kak| gan| min| bos| min)?$/i.test(lowerText);
             if (isGreeting) {
                 const sapaanReply = "Halo kak! 👋 Ada yang bisa kami bantu?";
-                await sock.sendMessage(senderJid, { text: sapaanReply });
+                await sendReplyWithTyping(sock, senderJid, { text: sapaanReply }, 1200);
+                consumeUserCredit(userId);
                 addToMemory(userId, customerPhone, 'ai', sapaanReply);
                 supabase.from('chats').insert([{
                     user_id: userId, customer_phone: customerPhone, customer_name: customerName,
@@ -920,7 +1100,8 @@ async function startWhatsAppBot(userId, onStatus) {
                 } else {
                     originReply = `Pengiriman toko kami langsung dari *${originKota}* ya kak 😊\nAda produk yang ingin kakak tanyakan atau pesan?`;
                 }
-                await sock.sendMessage(senderJid, { text: originReply });
+                await sendReplyWithTyping(sock, senderJid, { text: originReply }, 1500);
+                consumeUserCredit(userId);
                 addToMemory(userId, customerPhone, 'ai', originReply);
                 supabase.from('chats').insert([{
                     user_id: userId, customer_phone: customerPhone, customer_name: customerName,
@@ -1696,14 +1877,16 @@ async function startWhatsAppBot(userId, onStatus) {
                     if (mediaPayload) {
                         if (aiReply && aiReply.length <= 1000) {
                             mediaPayload.caption = aiReply;
-                            await sock.sendMessage(senderJid, mediaPayload);
+                            await sendReplyWithTyping(sock, senderJid, mediaPayload);
+                            consumeUserCredit(userId);
                             imageSentSuccessfully = true;
                         } else {
                             mediaPayload.caption = `Foto produk *${prodNameDisplay}* kak 😊`;
-                            await sock.sendMessage(senderJid, mediaPayload);
+                            await sendReplyWithTyping(sock, senderJid, mediaPayload);
                             if (aiReply) {
-                                await sock.sendMessage(senderJid, { text: aiReply });
+                                await sendReplyWithTyping(sock, senderJid, { text: aiReply });
                             }
+                            consumeUserCredit(userId);
                             imageSentSuccessfully = true;
                         }
                         console.log(`✅ Gambar produk "${prodNameDisplay}" berhasil dikirim ke ${customerName}`);
@@ -1717,7 +1900,8 @@ async function startWhatsAppBot(userId, onStatus) {
 
             // Kirim balasan teks ke WhatsApp jika gambar belum/gagal dikirim dengan caption
             if (!imageSentSuccessfully) {
-                await sock.sendMessage(senderJid, { text: aiReply });
+                await sendReplyWithTyping(sock, senderJid, { text: aiReply });
+                consumeUserCredit(userId);
                 console.log(`✅ Balas ke ${customerName}: ${aiReply.substring(0, 100)}`);
             }
 
@@ -1832,6 +2016,20 @@ async function startWhatsAppBot(userId, onStatus) {
         app.post('/api/bot/start', async (req, res) => {
             const { userId } = req.body;
             if (!userId) return res.status(400).json({ error: 'userId diperlukan' });
+
+            // 0. Validasi masa trial & batas kuota terlebih dahulu
+            const access = await checkUserAccess(userId, true);
+            if (!access.isAllowed) {
+                const errorMsg = access.expiredReason === 'TIME_EXPIRED'
+                    ? 'Masa uji coba gratis (trial 1 hari / 24 jam) Anda telah berakhir. Silakan pilih paket langganan untuk melanjutkan.'
+                    : 'Batas kuota 100 kredit chat WhatsApp trial Anda telah habis terpakai. Silakan pilih paket langganan untuk melanjutkan.';
+                return res.status(403).json({
+                    status: 'EXPIRED',
+                    isTrialExpired: true,
+                    expiredReason: access.expiredReason,
+                    error: errorMsg
+                });
+            }
 
             // 1. Jika sudah terhubung secara riil
             if (activeSessions[userId]?.status === 'CONNECTED' && activeSessions[userId]?.sock?.ws?.readyState === 1) {
@@ -2051,24 +2249,126 @@ async function startWhatsAppBot(userId, onStatus) {
             }
         });
 
-        // Endpoint untuk mengecek status bot
-        app.get('/api/bot/status/:userId', (req, res) => {
+        // Endpoint untuk mengecek status bot & masa trial
+        app.get('/api/bot/status/:userId', async (req, res) => {
             const { userId } = req.params;
             const session = activeSessions[userId];
+            const access = await checkUserAccess(userId);
+
+            const baseInfo = {
+                isTrialExpired: access.isExpired,
+                expiredReason: access.expiredReason,
+                remainingCredits: access.remainingCredits,
+                usedCredits: access.usedCredits,
+                totalQuota: access.totalQuota,
+                trialHoursLeft: access.trialHoursLeft,
+                plan: access.plan
+            };
+
+            // Jika masa trial atau kuota habis, bot otomatis berstatus EXPIRED & nonaktif
+            if (access.isExpired) {
+                return res.json({
+                    status: 'EXPIRED',
+                    isBotActive: false,
+                    ...baseInfo
+                });
+            }
+
             if (session) {
+                const isAutoActive = session.isAutoReplyActive !== false;
                 if (session.status === 'CONNECTED') {
-                    res.json({ status: 'CONNECTED', isBotActive: true });
+                    res.json({ status: 'CONNECTED', isBotActive: isAutoActive, ...baseInfo });
                 } else if (session.status === 'WAITING_PAIRING_CODE' || session.pairingCode) {
-                    res.json({ status: 'PAIRING_CODE', pairingCode: session.pairingCode, qr: session.qr });
+                    res.json({ status: 'PAIRING_CODE', pairingCode: session.pairingCode, qr: session.qr, isBotActive: isAutoActive, ...baseInfo });
                 } else if (session.status === 'SCAN_QR' || session.qr) {
-                    // Jika ada QR code aktif yang siap di-scan
-                    res.json({ status: 'qr', qr: session.qr, pairingCode: session.pairingCode || null });
+                    res.json({ status: 'qr', qr: session.qr, pairingCode: session.pairingCode || null, isBotActive: isAutoActive, ...baseInfo });
                 } else {
-                    res.json({ status: 'CONNECTING', pairingCode: session.pairingCode || null });
+                    res.json({ status: 'CONNECTING', pairingCode: session.pairingCode || null, isBotActive: isAutoActive, ...baseInfo });
                 }
             } else {
-                res.json({ status: 'DISCONNECTED' });
+                res.json({ status: 'DISCONNECTED', isBotActive: false, ...baseInfo });
             }
+        });
+
+        // Endpoint toggle on/off auto-reply AI
+        app.post('/api/bot/toggle-active', (req, res) => {
+            const { active, userId } = req.body;
+            const targetUserId = userId || Object.keys(activeSessions)[0];
+            if (targetUserId && activeSessions[targetUserId]) {
+                activeSessions[targetUserId].isAutoReplyActive = Boolean(active);
+                console.log(`[BOT TOGGLE] User ${targetUserId} mengubah mode auto-reply: ${active ? 'AKTIF' : 'NONAKTIF'}`);
+            }
+            res.json({ success: true, isBotActive: Boolean(active) });
+        });
+
+        // Endpoint menghapus riwayat chat pelanggan tertentu atau seluruh chat user (Reset Testing)
+        app.post('/api/chat/clear', async (req, res) => {
+            const { userId, customerPhone } = req.body;
+            if (!userId) return res.status(400).json({ error: 'userId diperlukan' });
+
+            try {
+                if (customerPhone) {
+                    const cleanPhone = String(customerPhone).replace(/\D/g, '');
+                    // 1. Bersihkan in-memory history
+                    const memKey = getMemoryKey(userId, customerPhone);
+                    const memKeyClean = getMemoryKey(userId, cleanPhone);
+                    delete inMemoryHistory[memKey];
+                    delete inMemoryHistory[memKeyClean];
+
+                    // 2. Bersihkan in-memory session pelanggan
+                    if (activeSessions[userId]?.customers) {
+                        delete activeSessions[userId].customers[customerPhone];
+                        delete activeSessions[userId].customers[cleanPhone];
+                    }
+
+                    // 3. Hapus dari database Supabase
+                    const { error } = await supabase
+                        .from('chats')
+                        .delete()
+                        .eq('user_id', userId)
+                        .or(`customer_phone.eq.${customerPhone},customer_phone.eq.${cleanPhone}`);
+
+                    if (error) throw error;
+                    console.log(`🗑️ Riwayat chat dengan ${customerPhone} berhasil dihapus permanen oleh user ${userId}`);
+                    return res.json({ success: true, message: `Riwayat chat dengan ${customerPhone} berhasil dihapus.` });
+                } else {
+                    // Hapus semua memory history user ini
+                    Object.keys(inMemoryHistory).forEach(k => {
+                        if (k.startsWith(`${userId}_`)) delete inMemoryHistory[k];
+                    });
+                    if (activeSessions[userId]) {
+                        activeSessions[userId].customers = {};
+                    }
+
+                    // Hapus semua chat user ini di Supabase
+                    const { error } = await supabase
+                        .from('chats')
+                        .delete()
+                        .eq('user_id', userId);
+
+                    if (error) throw error;
+                    console.log(`🗑️ Semua riwayat chat user ${userId} berhasil dibersihkan`);
+                    return res.json({ success: true, message: 'Semua riwayat chat berhasil dibersihkan.' });
+                }
+            } catch (err) {
+                console.error('Gagal menghapus riwayat chat:', err);
+                res.status(500).json({ error: 'Gagal menghapus riwayat chat: ' + err.message });
+            }
+        });
+
+        // Endpoint membersihkan in-memory cache chat (dipanggil saat Knowledge Base atau Produk diubah)
+        app.post('/api/chat/clear-cache', (req, res) => {
+            const { userId } = req.body;
+            if (userId) {
+                Object.keys(inMemoryHistory).forEach(k => {
+                    if (k.startsWith(`${userId}_`)) delete inMemoryHistory[k];
+                });
+                if (activeSessions[userId]) {
+                    activeSessions[userId].customers = {};
+                }
+                console.log(`🧹 Cache in-memory chat untuk user ${userId} dibersihkan`);
+            }
+            res.json({ success: true });
         });
         // ==========================================
         // ADMIN API ENDPOINTS (SUPER ADMIN)
