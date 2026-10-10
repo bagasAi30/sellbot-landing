@@ -16,26 +16,70 @@ document.addEventListener('DOMContentLoaded', () => {
     let cachedTransactions = [];
 
     // ============================================
-    // 1. NAVIGASI SIDEBAR
+    // 1. NAVIGASI SIDEBAR & MOBILE NAVIGATION
     // ============================================
     const navItems = document.querySelectorAll('.sidebar-nav .nav-item[data-target]');
+    const bottomNavItems = document.querySelectorAll('.mobile-bottom-nav .mobile-nav-item[data-target]');
     const sections = document.querySelectorAll('.dashboard-section');
+    const adminSidebar = document.getElementById('adminSidebar');
+    const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+    const btnMobileMenu = document.getElementById('btnMobileMenu');
+    const btnCloseSidebar = document.getElementById('btnCloseSidebar');
+
+    function closeMobileSidebar() {
+        if (adminSidebar) adminSidebar.classList.remove('open');
+        if (sidebarBackdrop) sidebarBackdrop.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    function openMobileSidebar() {
+        if (adminSidebar) adminSidebar.classList.add('open');
+        if (sidebarBackdrop) sidebarBackdrop.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    if (btnMobileMenu) btnMobileMenu.addEventListener('click', openMobileSidebar);
+    if (btnCloseSidebar) btnCloseSidebar.addEventListener('click', closeMobileSidebar);
+    if (sidebarBackdrop) sidebarBackdrop.addEventListener('click', closeMobileSidebar);
+
+    window.switchAdminTab = function(targetId) {
+        navItems.forEach(n => n.classList.remove('active'));
+        bottomNavItems.forEach(b => b.classList.remove('active'));
+
+        const targetNav = document.querySelector(`.sidebar-nav .nav-item[data-target="${targetId}"]`);
+        if (targetNav) targetNav.classList.add('active');
+
+        const targetBottomNav = document.querySelector(`.mobile-bottom-nav .mobile-nav-item[data-target="${targetId}"]`);
+        if (targetBottomNav) targetBottomNav.classList.add('active');
+
+        sections.forEach(s => s.classList.remove('active'));
+        const targetSection = document.getElementById(targetId);
+        if (targetSection) {
+            targetSection.classList.add('active');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            // Auto refresh data saat membuka tab tertentu
+            if (targetId === 'revenue') fetchRevenueData();
+            if (targetId === 'health') fetchSystemHealth();
+            if (targetId === 'settings') loadPlatformSettings();
+            if (targetId === 'users') fetchUsers();
+        }
+
+        closeMobileSidebar();
+    };
 
     navItems.forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
-            navItems.forEach(n => n.classList.remove('active'));
-            item.classList.add('active');
-            sections.forEach(s => s.classList.remove('active'));
             const targetId = item.getAttribute('data-target');
-            const targetSection = document.getElementById(targetId);
-            if (targetSection) {
-                targetSection.classList.add('active');
-                // Auto refresh data saat membuka tab tertentu
-                if (targetId === 'revenue') fetchRevenueData();
-                if (targetId === 'health') fetchSystemHealth();
-                if (targetId === 'settings') loadPlatformSettings();
-            }
+            if (targetId) window.switchAdminTab(targetId);
+        });
+    });
+
+    bottomNavItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = item.getAttribute('data-target');
+            if (targetId) window.switchAdminTab(targetId);
         });
     });
 
@@ -431,6 +475,35 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const btnManualCleanChats = document.getElementById('btnManualCleanChats');
+    if (btnManualCleanChats) {
+        btnManualCleanChats.addEventListener('click', async () => {
+            const inputDays = document.getElementById('inputCleanDays');
+            const days = Number(inputDays?.value || 30);
+            if (!confirm(`Hapus riwayat chat pelanggan yang lebih dari ${days} hari? Data transaksi (invoice) dan database kontak TIDAK akan terhapus.`)) return;
+
+            const origHtml = btnManualCleanChats.innerHTML;
+            btnManualCleanChats.disabled = true;
+            btnManualCleanChats.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i> Membersihkan...';
+
+            try {
+                const res = await fetch('/api/admin/clean-chats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ days })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Gagal membersihkan chat');
+                showToast(data.message || `Berhasil membersihkan chat lama > ${days} hari`, 'success');
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                btnManualCleanChats.innerHTML = origHtml;
+                btnManualCleanChats.disabled = false;
+            }
+        });
+    }
+
     // ============================================
     // 11. MANAGE / EDIT / DELETE USER
     // ============================================
@@ -442,7 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const idEl = document.getElementById('editUserId');
 
         if (nameEl) nameEl.value = storeName;
-        if (planEl) planEl.value = plan || 'trial';
+        if (planEl) planEl.value = (plan || 'trial').toLowerCase();
         if (statusEl) statusEl.value = status || 'active';
         if (idEl) idEl.value = userId;
 
@@ -453,6 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnSaveEditUser) {
         btnSaveEditUser.addEventListener('click', async () => {
             const userId = document.getElementById('editUserId')?.value;
+            const store_name = document.getElementById('editUserStoreName')?.value?.trim();
             const plan = document.getElementById('editUserPlan')?.value;
             const status = document.getElementById('editUserStatus')?.value;
 
@@ -469,7 +543,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch('/api/admin/edit-user', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId, plan, status })
+                    body: JSON.stringify({ userId, store_name, plan, status })
                 });
                 const data = await res.json();
                 if (!res.ok || data.error) throw new Error(data.error || 'Gagal memperbarui user');
@@ -524,10 +598,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const name = document.getElementById('newCustomerName')?.value?.trim();
             const store = document.getElementById('newStoreName')?.value?.trim();
             const email = document.getElementById('newCustomerEmail')?.value?.trim();
+            const password = document.getElementById('newCustomerPassword')?.value?.trim() || 'password123';
             const plan = document.getElementById('newCustomerPlan')?.value || 'trial';
 
             if (!name || !store || !email) {
-                showToast('Harap lengkapi semua field wajib', 'error');
+                showToast('Harap lengkapi semua field wajib (Nama, Toko, Email)', 'error');
                 return;
             }
 
@@ -539,29 +614,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch('/api/admin/add-customer', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password: 'password123' })
+                    body: JSON.stringify({ email, password, name, store_name: store, plan })
                 });
                 const data = await res.json();
                 if (!res.ok || data.error) throw new Error(data.error || 'Gagal menambahkan user');
 
-                // Update metadata nama toko & plan
-                if (data.user?.id) {
-                    await fetch('/api/admin/edit-user', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            userId: data.user.id,
-                            plan,
-                            status: 'active'
-                        })
-                    });
-                }
-
-                showToast(`Customer "${name}" berhasil ditambahkan! Password default: password123`, 'success');
+                showToast(`Customer "${name}" (${email}) berhasil ditambahkan! Password: ${password}`, 'success');
                 closeModal('addCustomerModal');
                 document.getElementById('newCustomerName').value = '';
                 document.getElementById('newStoreName').value = '';
                 document.getElementById('newCustomerEmail').value = '';
+                if (document.getElementById('newCustomerPassword')) document.getElementById('newCustomerPassword').value = '';
                 fetchUsers();
                 fetchOverviewStats();
             } catch (err) {

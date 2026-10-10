@@ -102,11 +102,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const userMeta = activeUser.user_metadata || {};
         const storeName = userMeta.store_name || localStorage.getItem('storeName') || 'Toko Anda';
         const profilePhoto = localStorage.getItem('profilePhoto');
-        const plan = userMeta.plan || 'Trial';
+        const rawPlan = userMeta.plan || localStorage.getItem('user_plan') || 'Trial';
+        const plan = rawPlan.charAt(0).toUpperCase() + rawPlan.slice(1).toLowerCase();
+
+        localStorage.setItem('user_plan', plan);
+        window.currentUserPlan = plan;
 
         const planBadge = document.getElementById('currentPlanBadge');
         if (planBadge) {
-            const planText = plan.toLowerCase() === 'trial' ? 'Trial (1 Hari / 100 Kredit)' : (plan.charAt(0).toUpperCase() + plan.slice(1));
+            const planText = plan.toLowerCase() === 'trial' ? 'Trial (1 Hari / 100 Kredit)' : plan;
             planBadge.innerHTML = `<i class="ph-fill ph-check-circle"></i> Current Plan: ${planText}`;
         }
 
@@ -990,42 +994,106 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =============================================
     // 5. BILLING & PAYMENT
     // =============================================
+    const WA_BILLING_PHONE = '62895323671211';
+
     const PLAN_INFO = {
-        'Starter': { name: 'Starter', price: 'Rp 99.000', priceNum: 99000, credits: '3.000 AI Credit / bulan' },
-        'Pro': { name: 'Pro', price: 'Rp 199.000', priceNum: 199000, credits: '8.000 AI Credit / bulan' },
-        'Business': { name: 'Business', price: 'Rp 399.000', priceNum: 399000, credits: '20.000 AI Credit / bulan' },
-        'Agency': { name: 'Agency', price: 'Rp 999.000', priceNum: 999000, credits: '50.000 AI Credit / bulan' }
+        'Starter': { 
+            name: 'STARTER', 
+            price: 'Rp 99.000', 
+            priceFull: 'Rp 99.000/bulan', 
+            priceNum: 99000, 
+            credits: '3.000 AI Credit / bulan',
+            specs: '1 nomor WhatsApp, AI WhatsApp Otomatis, Knowledge Base, Follow-up, Blacklist'
+        },
+        'Pro': { 
+            name: 'PRO', 
+            price: 'Rp 199.000', 
+            priceFull: 'Rp 199.000/bulan', 
+            priceNum: 199000, 
+            credits: '8.000 AI Credit / bulan',
+            specs: '2 nomor WhatsApp, Semua Fitur Starter, Deteksi Gambar, Voice Note, Follow-up Lanjutan'
+        },
+        'Business': { 
+            name: 'BUSINESS', 
+            price: 'Rp 399.000', 
+            priceFull: 'Rp 399.000/bulan', 
+            priceNum: 399000, 
+            credits: '20.000 AI Credit / bulan',
+            specs: '5 nomor WhatsApp, Semua Fitur Pro, Priority Processing, Advanced Automation, Laporan Lengkap'
+        },
+        'Agency': { 
+            name: 'AGENCY', 
+            price: 'Rp 999.000', 
+            priceFull: 'Rp 999.000/bulan', 
+            priceNum: 999000, 
+            credits: '50.000 AI Credit / bulan',
+            specs: 'Banyak nomor WhatsApp, Multi-workspace, Priority Support, Fitur Agency Eksklusif'
+        }
     };
 
     let selectedPlan = 'Pro'; // Default fallback
 
+    window.getBillingWaLink = function(planName) {
+        const rawKey = (planName || 'Pro').trim();
+        const matchedKey = Object.keys(PLAN_INFO).find(k => k.toLowerCase() === rawKey.toLowerCase()) || 'Pro';
+        const plan = PLAN_INFO[matchedKey];
+
+        const storeName = localStorage.getItem('storeName') || localStorage.getItem('companyName') || '';
+        const userEmail = localStorage.getItem('user_email') || '';
+        const currentPlan = localStorage.getItem('user_plan') || '';
+
+        let greeting = '';
+        if (matchedKey.toLowerCase() === 'agency') {
+            greeting = `Halo Admin AsistenLapak AI, saya tertarik dan ingin upgrade / konsultasi Paket *${plan.name}* (${plan.priceFull}).`;
+        } else {
+            greeting = `Halo Admin AsistenLapak AI, saya ingin upgrade / berlangganan Paket *${plan.name}* (${plan.priceFull}).`;
+        }
+
+        let details = [];
+        if (storeName) details.push(`• Nama Toko: ${storeName}`);
+        if (userEmail) details.push(`• Email Terdaftar: ${userEmail}`);
+        if (currentPlan) details.push(`• Paket Saat Ini: ${currentPlan}`);
+        details.push(`• Kuota AI: ${plan.credits}`);
+        details.push(`• Fitur: ${plan.specs}`);
+
+        let fullMessage = greeting + '\n\n';
+        if (details.length > 0) {
+            fullMessage += `📌 *Detail Akun & Paket:*\n` + details.join('\n') + '\n\n';
+        }
+
+        if (matchedKey.toLowerCase() === 'agency') {
+            fullMessage += `Mohon informasi dan konsultasi lebih lanjut untuk aktivasi paketnya. Terima kasih!`;
+        } else {
+            fullMessage += `Mohon dibantu instruksi pembayaran dan aktivasi paket akun saya. Terima kasih!`;
+        }
+
+        return `https://wa.me/${WA_BILLING_PHONE}?text=${encodeURIComponent(fullMessage)}`;
+    };
+
     window.selectPlan = function(planName) {
         selectedPlan = planName || 'Pro';
-        const plan = PLAN_INFO[selectedPlan] || PLAN_INFO['Pro'];
-        
-        const nameEl = document.getElementById('checkoutPlanName');
-        const priceEl = document.getElementById('checkoutPlanPrice');
-        const creditsEl = document.getElementById('checkoutPlanCredits');
-        
-        if (nameEl) nameEl.innerText = `Paket ${plan.name}`;
-        if (priceEl) priceEl.innerText = plan.price;
-        if (creditsEl) creditsEl.innerText = plan.credits;
+        const waUrl = window.getBillingWaLink(selectedPlan);
 
-        openModal('checkoutModal');
+        if (typeof showToast === 'function') {
+            showToast(`Membuka WhatsApp Admin (+62 895-3236-71211) untuk Paket ${selectedPlan}...`, 'success');
+        }
+
+        window.open(waUrl, '_blank');
     };
 
     window.openUpgradePlanModal = function() {
-        const currentPlan = (localStorage.getItem('user_plan') || 'Starter').toLowerCase();
+        const currentPlan = (window.currentUserPlan || localStorage.getItem('user_plan') || 'Starter').toLowerCase();
         let nextPlan = 'Pro';
         if (currentPlan === 'trial' || currentPlan === 'starter') nextPlan = 'Pro';
         else if (currentPlan === 'pro') nextPlan = 'Business';
         else if (currentPlan === 'business') nextPlan = 'Agency';
         else nextPlan = 'Agency';
+
         window.selectPlan(nextPlan);
     };
 
     window.updateBillingPlanButtons = function(currentPlan) {
-        const activePlan = (currentPlan || localStorage.getItem('user_plan') || 'Starter').trim();
+        const activePlan = (currentPlan || window.currentUserPlan || localStorage.getItem('user_plan') || 'Starter').trim();
         const activePlanLower = activePlan.toLowerCase();
 
         const cards = document.querySelectorAll('#billing .pricing-card');
@@ -1057,7 +1125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (btn) {
                     const isFeatured = card.classList.contains('featured');
                     btn.className = `btn ${isFeatured ? 'btn-primary' : 'btn-outline'} full-width plan-action-btn`;
-                    btn.innerHTML = 'Pilih Paket';
+                    btn.innerHTML = '<i class="ph-fill ph-whatsapp-logo"></i> Upgrade via WhatsApp';
                     btn.disabled = false;
                     btn.setAttribute('onclick', `selectPlan('${cardPlan}')`);
                     btn.style.cursor = 'pointer';
@@ -1066,116 +1134,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     };
 
-    window.processPayment = async function () {
-        const btn = document.querySelector('#checkoutModal .btn-primary');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Memproses...';
-        btn.disabled = true;
-
-        try {
-            // Get user info from Supabase session
-            const { data: sessionData } = await window.supabaseClient.auth.getSession();
-            const user = sessionData?.session?.user;
-            
-            if (!user) {
-                showToast('Anda harus login terlebih dahulu.', 'error');
-                return;
-            }
-
-            const selectedRadio = document.querySelector('input[name="paymentMethod"]:checked');
-            const chosenMethod = selectedRadio ? selectedRadio.value : 'qris';
-
-            // Call Backend API to create Midtrans transaction
-            const response = await fetch('/api/payment/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    plan: selectedPlan,
-                    userId: user.id,
-                    email: user.email,
-                    name: localStorage.getItem('storeName') || 'User',
-                    phone: user.user_metadata?.phone || '',
-                    paymentMethod: chosenMethod
-                })
-            });
-
-            let result = null;
-            try {
-                result = await response.json();
-            } catch (jsonErr) {
-                const rawText = await response.text().catch(() => '');
-                console.error('Non-JSON response dari server payment:', rawText);
-                result = {
-                    success: false,
-                    message: response.status === 401 
-                        ? 'Autentikasi Midtrans Gagal (HTTP 401): Server Key tidak valid atau mode Sandbox/Production tidak sesuai.'
-                        : `Gagal memproses transaksi pembayaran (Server status: ${response.status}).`
-                };
-            }
-
-            if (result && result.success && result.token) {
-                // Pastikan Midtrans Snap SDK ter-load
-                if (typeof window.snap === 'undefined' || typeof window.snap.pay !== 'function') {
-                    try {
-                        const cfgRes = await fetch('/api/payment/config');
-                        const cfg = await cfgRes.json();
-                        if (cfg && cfg.clientKey) {
-                            await new Promise((resolve) => {
-                                const script = document.createElement('script');
-                                script.src = cfg.isProduction
-                                    ? 'https://app.midtrans.com/snap/snap.js'
-                                    : 'https://app.sandbox.midtrans.com/snap/snap.js';
-                                script.setAttribute('data-client-key', cfg.clientKey);
-                                script.onload = () => resolve(true);
-                                script.onerror = () => resolve(false);
-                                document.head.appendChild(script);
-                            });
-                        }
-                    } catch (e) {
-                        console.warn('Gagal memuat snap.js otomatis:', e);
-                    }
-                }
-
-                // Close checkout modal
-                closeModal('checkoutModal');
-                
-                if (window.snap && typeof window.snap.pay === 'function') {
-                    // Open Midtrans Snap Popup
-                    window.snap.pay(result.token, {
-                        onSuccess: function(payResult){
-                            showToast('Pembayaran berhasil! Kredit Anda akan segera ditambahkan.', 'success');
-                            setTimeout(() => window.location.reload(), 2000);
-                        },
-                        onPending: function(payResult){
-                            showToast('Menunggu penyelesaian pembayaran Anda.', 'warning');
-                        },
-                        onError: function(payResult){
-                            showToast('Pembayaran gagal atau dibatalkan.', 'error');
-                        },
-                        onClose: function(){
-                            showToast('Anda menutup pembayaran sebelum selesai.', 'warning');
-                        }
-                    });
-                } else if (result.redirect_url) {
-                    // Fallback jika Snap Popup tidak terbuka di browser
-                    window.location.href = result.redirect_url;
-                } else {
-                    showToast('Snap Midtrans belum siap. Periksa konfigurasi kredensial.', 'error');
-                }
-            } else {
-                let errMsg = (result && result.message) || 'Gagal membuat transaksi pembayaran.';
-                if ((result && result.rawError && result.rawError.includes('401')) || (result && result.is401)) {
-                    errMsg = 'Autentikasi Midtrans Gagal (HTTP 401): Server Key tidak valid atau mode Sandbox/Production tidak sesuai. Mohon periksa kembali kredensial di Environment Variables.';
-                }
-                showToast(errMsg, 'error');
-            }
-        } catch (error) {
-            console.error('Payment Error:', error);
-            showToast(error.message || 'Terjadi kesalahan pada sistem pembayaran.', 'error');
-        } finally {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        }
+    window.processPayment = function () {
+        closeModal('checkoutModal');
+        window.selectPlan(selectedPlan || 'Pro');
     };
 
     // =============================================
@@ -1767,24 +1728,39 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const usedCredits = aiReplyCount || 0;
 
-            // Ambil paket aktif dari invoice sukses terakhir di Supabase jika ada
+            // Ambil paket aktif dari metadata user auth atau database
+            let activeUserPlan = window.currentUserPlan || localStorage.getItem('user_plan') || 'Starter';
             try {
-                const { data: latestInvoice } = await window.supabaseClient
-                    .from('invoices')
-                    .select('plan_name, credits_added')
-                    .eq('user_id', user_id)
-                    .eq('status', 'success')
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-
-                if (latestInvoice && latestInvoice.plan_name) {
-                    localStorage.setItem('user_plan', latestInvoice.plan_name);
+                const { data: authData } = await window.supabaseClient.auth.getUser();
+                if (authData?.user?.user_metadata?.plan) {
+                    const p = authData.user.user_metadata.plan;
+                    activeUserPlan = p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+                    localStorage.setItem('user_plan', activeUserPlan);
+                    window.currentUserPlan = activeUserPlan;
                 }
-            } catch (invErr) {}
+            } catch (authErr) {}
 
-            // Ambil paket aktif dari metadata user atau localStorage
-            const userPlan = localStorage.getItem('user_plan') || 'Starter';
+            // Jika masih Trial, cek apakah ada invoice sukses di Supabase (pembayaran paket baru)
+            if (activeUserPlan.toLowerCase() === 'trial') {
+                try {
+                    const { data: latestInvoice } = await window.supabaseClient
+                        .from('invoices')
+                        .select('plan_name, credits_added')
+                        .eq('user_id', user_id)
+                        .in('status', ['success', 'paid', 'settlement'])
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+
+                    if (latestInvoice && latestInvoice.plan_name) {
+                        activeUserPlan = latestInvoice.plan_name.charAt(0).toUpperCase() + latestInvoice.plan_name.slice(1).toLowerCase();
+                        localStorage.setItem('user_plan', activeUserPlan);
+                        window.currentUserPlan = activeUserPlan;
+                    }
+                } catch (invErr) {}
+            }
+
+            const userPlan = activeUserPlan;
             let totalQuota = 3000;
             const planLower = userPlan.toLowerCase();
             if (planLower === 'trial') totalQuota = 100;
@@ -1933,7 +1909,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Inisialisasi awal tombol billing dengan paket saat ini
     if (typeof window.updateBillingPlanButtons === 'function') {
-        window.updateBillingPlanButtons();
+        window.updateBillingPlanButtons(window.currentUserPlan || localStorage.getItem('user_plan') || 'Starter');
     }
 
     fetchDashboardData();

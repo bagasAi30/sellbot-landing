@@ -708,8 +708,8 @@
             <header class="section-header">
                 <h2>Billing & Subscription</h2>
                 <div class="header-actions">
-                    <span class="status-badge ai" style="font-size: 14px;" id="currentPlanBadge"><i class="ph-fill ph-check-circle"></i>
-                        Current Plan: Trial</span>
+                    <span class="status-badge ai" style="font-size: 14px;" id="currentPlanBadge"><i class="ph-fill ph-circle-notch ph-spin"></i>
+                        Current Plan: Memuat...</span>
                 </div>
             </header>
 
@@ -720,7 +720,7 @@
                         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
                             <h3 style="font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0;">Ringkasan Pemakaian & Sisa Kredit AI</h3>
                             <span class="status-badge ai" id="billingPlanBadge" style="font-size: 12px; padding: 4px 10px;">
-                                <i class="ph-fill ph-sparkle"></i> Paket Starter
+                                <i class="ph-fill ph-sparkle"></i> Memuat...
                             </span>
                         </div>
                         <p style="color: var(--text-secondary); font-size: 13px; margin: 0;">Kredit AI terpakai 1 poin setiap kali bot membalas pesan pelanggan secara otomatis.</p>
@@ -777,7 +777,7 @@
                         <li><i class="ph-fill ph-check-circle"></i> Blacklist</li>
                         <li><i class="ph-fill ph-check-circle"></i> 1 nomor WhatsApp</li>
                     </ul>
-                    <button class="btn btn-outline full-width plan-action-btn" data-plan="Starter" style="margin-top:20px;" onclick="selectPlan('Starter')">Pilih Paket</button>
+                    <button class="btn btn-outline full-width plan-action-btn" data-plan="Starter" style="margin-top:20px;" onclick="selectPlan('Starter')"><i class="ph-fill ph-whatsapp-logo"></i> Upgrade via WhatsApp</button>
                 </div>
 
                 <!-- Pro -->
@@ -795,7 +795,7 @@
                         <li><i class="ph-fill ph-check-circle"></i> Follow-up lanjutan</li>
                         <li><i class="ph-fill ph-check-circle"></i> 2 nomor WhatsApp</li>
                     </ul>
-                    <button class="btn btn-primary full-width plan-action-btn" data-plan="Pro" style="margin-top:20px;" onclick="selectPlan('Pro')">Pilih Paket</button>
+                    <button class="btn btn-primary full-width plan-action-btn" data-plan="Pro" style="margin-top:20px;" onclick="selectPlan('Pro')"><i class="ph-fill ph-whatsapp-logo"></i> Upgrade via WhatsApp</button>
                 </div>
 
                 <!-- Business -->
@@ -812,7 +812,7 @@
                         <li><i class="ph-fill ph-check-circle"></i> Laporan lebih lengkap</li>
                         <li><i class="ph-fill ph-check-circle"></i> 5 nomor WhatsApp</li>
                     </ul>
-                    <button class="btn btn-outline full-width plan-action-btn" data-plan="Business" style="margin-top:20px;" onclick="selectPlan('Business')">Pilih Paket</button>
+                    <button class="btn btn-outline full-width plan-action-btn" data-plan="Business" style="margin-top:20px;" onclick="selectPlan('Business')"><i class="ph-fill ph-whatsapp-logo"></i> Upgrade via WhatsApp</button>
                 </div>
 
                 <!-- Agency -->
@@ -828,7 +828,7 @@
                         <li><i class="ph-fill ph-check-circle"></i> Priority support</li>
                         <li><i class="ph-fill ph-check-circle"></i> Fitur agency</li>
                     </ul>
-                    <button class="btn btn-outline full-width plan-action-btn" data-plan="Agency" style="margin-top:20px;" onclick="selectPlan('Agency')">Pilih Paket</button>
+                    <button class="btn btn-outline full-width plan-action-btn" data-plan="Agency" style="margin-top:20px;" onclick="selectPlan('Agency')"><i class="ph-fill ph-whatsapp-logo"></i> Upgrade via WhatsApp</button>
                 </div>
             </div>
         </section>
@@ -924,7 +924,7 @@
                 </label>
             </div>
 
-            <button class="btn btn-primary full-width" onclick="processPayment()">Konfirmasi Pembayaran</button>
+            <button class="btn btn-primary full-width" onclick="selectPlan(selectedPlan || 'Pro')"><i class="ph-fill ph-whatsapp-logo"></i> Hubungi WhatsApp Admin (+62 895-3236-71211)</button>
         </div>
     </div>
 
@@ -958,8 +958,8 @@
                 Silakan pilih paket langganan untuk terus menikmati asisten AI toko online Anda 24/7.
             </p>
             <button class="btn btn-primary full-width" style="margin-bottom: 10px;"
-                onclick="closeModal('trialExpiredModal'); sessionStorage.setItem('trialExpiredModalDismissed', 'true'); openModal('checkoutModal');">
-                <i class="ph-fill ph-sparkle"></i> Tingkatkan Paket Sekarang
+                onclick="closeModal('trialExpiredModal'); sessionStorage.setItem('trialExpiredModalDismissed', 'true'); selectPlan('Pro');">
+                <i class="ph-fill ph-whatsapp-logo"></i> Tingkatkan Paket via WhatsApp
             </button>
             <button class="btn btn-secondary full-width"
                 onclick="closeModal('trialExpiredModal'); sessionStorage.setItem('trialExpiredModalDismissed', 'true');">

@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="dashboard.css">
     <link rel="stylesheet" href="admin.css">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
 </head>
 <body class="dashboard-body">
     <!-- Decorative background blobs -->
@@ -19,12 +20,32 @@
     <div class="blob blob-3"></div>
     <div class="blob blob-4"></div>
 
-    <aside class="sidebar">
+    <!-- Mobile Top Navigation Header -->
+    <header class="mobile-top-bar" id="mobileTopBar">
+        <button type="button" class="mobile-menu-btn" id="btnMobileMenu" aria-label="Buka Menu Admin">
+            <i class="ph ph-list"></i>
+        </button>
+        <div class="mobile-logo">
+            <img src="favicon.svg" alt="AsistenLapak AI Logo" width="28" height="28">
+            <span>Admin <strong>Panel</strong></span>
+        </div>
+        <div class="mobile-user-badge" onclick="window.switchAdminTab && window.switchAdminTab('overview')">
+            <div class="avatar-small" style="width: 32px; height: 32px; font-size: 11px; font-weight: 700; background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center;">SA</div>
+        </div>
+    </header>
+
+    <!-- Sidebar Backdrop Overlay -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <aside class="sidebar" id="adminSidebar">
         <div class="sidebar-header">
             <div class="logo">
                 <img src="favicon.svg" alt="AsistenLapak AI Logo" width="32" height="32">
                 <span>Admin <strong>Panel</strong></span>
             </div>
+            <button type="button" class="sidebar-close-btn" id="btnCloseSidebar" aria-label="Tutup Menu Admin">
+                <i class="ph ph-x"></i>
+            </button>
         </div>
         <nav class="sidebar-nav">
             <a href="#" class="nav-item active" data-target="overview">
@@ -70,6 +91,10 @@
         <main class="main-content">
             <!-- Dashboard Section -->
             <section id="overview" class="dashboard-section active">
+                <div class="admin-mobile-header-info">
+                    <h2>Welcome, Super Admin 🛡️</h2>
+                    <p>Platform status is looking great today.</p>
+                </div>
                 
                 <div class="metrics-grid">
                     <div class="metric-card glass">
@@ -130,7 +155,7 @@
                     <div class="widget glass campaigns-widget">
                         <div class="widget-header">
                             <h3>Recent Registrations</h3>
-                            <a href="#" class="view-all" onclick="document.querySelector('[data-target=\'users\']').click()">View All <i class="ph ph-arrow-right"></i></a>
+                            <a href="#" class="view-all" onclick="window.switchAdminTab ? window.switchAdminTab('users') : document.querySelector('[data-target=\'users\']').click()">View All <i class="ph ph-arrow-right"></i></a>
                         </div>
                         <div class="table-wrapper">
                             <table>
@@ -160,9 +185,10 @@
             <section id="users" class="dashboard-section">
                 <header class="section-header">
                     <h2>User Management</h2>
-                    <div class="filters" style="display: flex; gap: 10px; align-items: center;">
+                    <div class="filters" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                         <input type="text" placeholder="Search customer or store..." class="filter-select glass" style="width: 250px;">
                         <button class="btn btn-outline btn-small" id="btnRefreshUsers" title="Refresh User List"><i class="ph ph-arrow-clockwise"></i></button>
+                        <button class="btn btn-primary btn-small" id="btnAddCustomerFromUsers" onclick="openModal('addCustomerModal')"><i class="ph ph-user-plus"></i> Tambah User</button>
                     </div>
                 </header>
 
@@ -402,11 +428,18 @@
                 <input type="email" class="form-control" id="newCustomerEmail" placeholder="email@contoh.com">
             </div>
             <div class="form-group" style="margin-top:16px;">
+                <label>Password Akun (Opsional)</label>
+                <input type="text" class="form-control" id="newCustomerPassword" placeholder="Default: password123">
+                <span class="form-hint">Jika dikosongkan, password awal otomatis: password123</span>
+            </div>
+            <div class="form-group" style="margin-top:16px;">
                 <label>Plan</label>
                 <select class="form-control" id="newCustomerPlan">
-                    <option value="trial">Trial</option>
-                    <option value="starter">Starter</option>
-                    <option value="pro">Pro</option>
+                    <option value="trial">Trial (1 Hari / 100 Kredit)</option>
+                    <option value="starter">Starter (3.000 Kredit)</option>
+                    <option value="pro">Pro (8.000 Kredit)</option>
+                    <option value="business">Business (20.000 Kredit)</option>
+                    <option value="agency">Agency (50.000 Kredit)</option>
                 </select>
             </div>
             <button class="btn btn-primary full-width" style="margin-top:20px;" id="btnSaveCustomer">
@@ -430,9 +463,11 @@
             <div class="form-group" style="margin-top:16px;">
                 <label>Plan</label>
                 <select class="form-control" id="editUserPlan">
-                    <option value="trial">Trial</option>
-                    <option value="starter">Starter</option>
-                    <option value="pro">Pro</option>
+                    <option value="trial">Trial (1 Hari / 100 Kredit)</option>
+                    <option value="starter">Starter (3.000 Kredit)</option>
+                    <option value="pro">Pro (8.000 Kredit)</option>
+                    <option value="business">Business (20.000 Kredit)</option>
+                    <option value="agency">Agency (50.000 Kredit)</option>
                 </select>
             </div>
             <div class="form-group" style="margin-top:16px;">
@@ -463,6 +498,30 @@
             <button class="btn btn-outline full-width" style="margin-top:16px;" onclick="closeModal('serverLogsModal')">Tutup</button>
         </div>
     </div>
+
+    <!-- Mobile Bottom Navigation Bar -->
+    <nav class="mobile-bottom-nav" id="mobileBottomNav">
+        <a href="#" class="mobile-nav-item active" data-target="overview">
+            <i class="ph ph-squares-four"></i>
+            <span>Overview</span>
+        </a>
+        <a href="#" class="mobile-nav-item" data-target="users">
+            <i class="ph ph-users-three"></i>
+            <span>Users</span>
+        </a>
+        <a href="#" class="mobile-nav-item" data-target="revenue">
+            <i class="ph ph-currency-circle-dollar"></i>
+            <span>Billing</span>
+        </a>
+        <a href="#" class="mobile-nav-item" data-target="health">
+            <i class="ph ph-activity"></i>
+            <span>Health</span>
+        </a>
+        <a href="#" class="mobile-nav-item" data-target="settings">
+            <i class="ph ph-gear"></i>
+            <span>Settings</span>
+        </a>
+    </nav>
 
     <script src="admin.js"></script>
 </body>

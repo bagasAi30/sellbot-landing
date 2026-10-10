@@ -277,29 +277,35 @@ async function checkUserAccess(userId, forceRefresh = false) {
             const { data: userData, error: uErr } = await supabase.auth.admin.getUserById(userId);
             if (!uErr && userData?.user) {
                 createdAt = userData.user.created_at;
-                userPlan = userData.user.user_metadata?.plan || 'Trial';
+                if (userData.user.user_metadata?.plan) {
+                    userPlan = userData.user.user_metadata.plan;
+                }
             }
         } catch (err) {
             console.warn(`[checkUserAccess] Gagal ambil auth user ${userId}:`, err.message);
         }
 
-        // 2. Cek apakah ada invoice sukses (paket langganan aktif)
+        // 2. Cek apakah ada invoice sukses (hanya jika metadata user masih Trial)
         let hasPaidInvoice = false;
-        try {
-            const { data: invoice } = await supabase
-                .from('invoices')
-                .select('plan_name, credits_added, status')
-                .eq('user_id', userId)
-                .in('status', ['success', 'paid', 'settlement'])
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
+        if (userPlan.toLowerCase() === 'trial') {
+            try {
+                const { data: invoice } = await supabase
+                    .from('invoices')
+                    .select('plan_name, credits_added, status')
+                    .eq('user_id', userId)
+                    .in('status', ['success', 'paid', 'settlement'])
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
 
-            if (invoice && invoice.plan_name) {
-                userPlan = invoice.plan_name;
-                hasPaidInvoice = true;
-            }
-        } catch (invErr) {}
+                if (invoice && invoice.plan_name) {
+                    userPlan = invoice.plan_name;
+                    hasPaidInvoice = true;
+                }
+            } catch (invErr) {}
+        } else {
+            hasPaidInvoice = true;
+        }
 
         // 3. Hitung pemakaian kredit AI (jumlah balasan AI dari tabel chats)
         let usedCredits = 0;
@@ -2678,12 +2684,19 @@ async function startWhatsAppBot(userId, onStatus) {
 
         // Tambah pengguna (tenant) baru
         app.post('/api/admin/add-customer', async (req, res) => {
-            const { email, password } = req.body;
+            const { email, password, name, store_name, plan } = req.body;
+            if (!email) return res.status(400).json({ error: 'Email wajib diisi' });
             try {
                 const { data, error } = await supabase.auth.admin.createUser({
                     email,
-                    password,
-                    email_confirm: true
+                    password: password || 'password123',
+                    email_confirm: true,
+                    user_metadata: {
+                        name: name || (email ? email.split('@')[0] : 'User'),
+                        store_name: store_name || name || 'Toko Baru',
+                        plan: plan || 'trial',
+                        status: 'active'
+                    }
                 });
                 if (error) throw error;
                 res.json({ message: 'Customer created successfully', user: data.user });
@@ -2694,13 +2707,56 @@ async function startWhatsAppBot(userId, onStatus) {
 
         // Edit pengguna (tenant)
         app.post('/api/admin/edit-user', async (req, res) => {
-            const { userId, plan, status } = req.body;
+            const { userId, plan, status, store_name } = req.body;
             if (!userId) return res.status(400).json({ error: 'User ID required' });
             try {
+                let updatedMeta = {
+                    ...(plan ? { plan: plan.toLowerCase() } : {}),
+                    ...(status ? { status } : {}),
+                    ...(store_name ? { store_name } : {})
+                };
+
+                try {
+                    const { data: userData } = await supabase.auth.admin.getUserById(userId);
+                    if (userData && userData.user && userData.user.user_metadata) {
+                        updatedMeta = {
+                            ...userData.user.user_metadata,
+                            ...updatedMeta
+                        };
+                    }
+                } catch (metaErr) {
+                    console.warn('Gagal membaca metadata user lama:', metaErr.message);
+                }
+
                 const { data, error } = await supabase.auth.admin.updateUserById(userId, {
-                    user_metadata: { plan, status }
+                    user_metadata: updatedMeta
                 });
                 if (error) throw error;
+
+                // Invalidate cache akses agar hak akses bot & dashboard terupdate seketika
+                userAccessCache.delete(userId);
+
+                // Sinkronkan ke tabel invoices jika admin mengatur paket baru
+                if (plan && plan.toLowerCase() !== 'trial') {
+                    const planName = plan.charAt(0).toUpperCase() + plan.slice(1).toLowerCase();
+                    const quotaMap = { 'starter': 3000, 'pro': 8000, 'business': 20000, 'agency': 50000 };
+                    const quota = quotaMap[plan.toLowerCase()] || 3000;
+                    try {
+                        await supabase.from('invoices').insert([{
+                            id: `ADM-${userId.substring(0, 8)}-${Date.now()}`,
+                            user_id: userId,
+                            plan_name: planName,
+                            amount: 0,
+                            credits_added: quota,
+                            status: 'success',
+                            payment_method: 'admin_manual',
+                            created_at: new Date().toISOString()
+                        }]);
+                    } catch (invErr) {
+                        console.warn('⚠️ Gagal sinkron invoice admin manual:', invErr.message);
+                    }
+                }
+
                 res.json({ message: 'User updated successfully', user: data.user });
             } catch (err) {
                 res.status(500).json({ error: err.message });
